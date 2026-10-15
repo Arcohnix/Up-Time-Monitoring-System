@@ -37,6 +37,20 @@ class Settings(BaseSettings):
     SCHEDULER_TICK_INTERVAL_SECONDS: float = 1.0
     SCHEDULER_MAX_CONCURRENCY: int = 50
 
+    # Alerting & Notification settings
+    ALERT_WEBHOOK_ENABLED: bool = False
+    ALERT_WEBHOOK_URL: Optional[str] = None
+    ALERT_WEBHOOK_TIMEOUT_SECONDS: float = 10.0
+
+    ALERT_EMAIL_ENABLED: bool = False
+    ALERT_EMAIL_SMTP_HOST: Optional[str] = None
+    ALERT_EMAIL_SMTP_PORT: int = 587
+    ALERT_EMAIL_SMTP_USER: Optional[str] = None
+    ALERT_EMAIL_SMTP_PASSWORD: Optional[str] = None
+    ALERT_EMAIL_USE_TLS: bool = True
+    ALERT_EMAIL_FROM: str = "alerts@utms.local"
+    ALERT_EMAIL_TO: Optional[str] = None
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def async_database_url(self) -> str:

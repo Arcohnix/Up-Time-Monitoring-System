@@ -4,6 +4,8 @@ from typing import List, Optional
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.alerts.base import AlertEvent, AlertEventType
+from app.alerts.service import AlertService, get_alert_service
 from app.checker.schemas import CheckResult
 from app.incidents.schemas import IncidentStatus, ServiceState
 from app.models.incident import IncidentModel
@@ -57,6 +59,7 @@ async def process_check_result(
     db: AsyncSession,
     service: Service,
     result: CheckResult,
+    alert_service: Optional[AlertService] = None,
 ) -> Optional[IncidentModel]:
     """Evaluate health check result against the service state machine and manage incident lifecycle.
 
@@ -117,6 +120,31 @@ async def process_check_result(
                 service.consecutive_failures,
                 result.error_message,
             )
+
+            # Dispatch notification for incident creation (failure alert)
+            try:
+                dispatcher = alert_service or get_alert_service()
+                event = AlertEvent(
+                    event_type=AlertEventType.INCIDENT_CREATED,
+                    incident_id=active_incident.id,
+                    service_id=service.id,
+                    service_name=service.name,
+                    service_url=service.url,
+                    timestamp=active_incident.started_at,
+                    failure_count=active_incident.failure_count,
+                    error_type=active_incident.last_error_type,
+                    error_message=active_incident.last_error_message,
+                    status_code=active_incident.last_status_code,
+                )
+                await dispatcher.dispatch(event)
+            except Exception as alert_exc:
+                logger.error(
+                    "Notification dispatch error on incident open for service %s: %s",
+                    service.id,
+                    alert_exc,
+                    exc_info=True,
+                )
+
             return active_incident
         else:
             # Existing incident is already open: update failure details without creating duplicates
@@ -136,6 +164,7 @@ async def process_check_result(
                 service.consecutive_failures,
                 result.error_message,
             )
+            # Repeated failures while incident is already open do NOT trigger duplicate alerts
             return active_incident
 
     else:
@@ -163,6 +192,30 @@ async def process_check_result(
                 service.name,
                 active_incident.failure_count,
             )
+
+            # Dispatch notification for incident recovery
+            try:
+                dispatcher = alert_service or get_alert_service()
+                event = AlertEvent(
+                    event_type=AlertEventType.INCIDENT_RESOLVED,
+                    incident_id=active_incident.id,
+                    service_id=service.id,
+                    service_name=service.name,
+                    service_url=service.url,
+                    timestamp=active_incident.resolved_at,
+                    failure_count=active_incident.failure_count,
+                    status_code=result.status_code,
+                    recovery_message=active_incident.recovery_message,
+                )
+                await dispatcher.dispatch(event)
+            except Exception as alert_exc:
+                logger.error(
+                    "Notification dispatch error on incident resolve for service %s: %s",
+                    service.id,
+                    alert_exc,
+                    exc_info=True,
+                )
+
             return active_incident
         else:
             # Normal healthy check or recovery from transient failure below threshold

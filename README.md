@@ -160,6 +160,40 @@ Sample response from `GET /health`:
 
 ---
 
+## Alerting & Notifications (Phase 7)
+
+UTMS includes a decoupled, asynchronous notification engine with support for pluggable providers.
+
+### Supported Providers:
+1. **Webhook (`WebhookNotificationProvider`)**: Asynchronous HTTP `POST` delivering JSON incident payloads to configured endpoints via `httpx`.
+2. **Email (`EmailNotificationProvider`)**: SMTP email alerts with structured outage and recovery details sent asynchronously.
+
+### Noise & Deduplication Rules:
+- **Incident Creation**: Exactly **one** failure notification is emitted when a service exceeds its consecutive failure threshold and transitions to `DOWN`.
+- **Ongoing Outage**: Subsequent failures while the incident is active do **not** generate duplicate notifications.
+- **Incident Recovery**: Exactly **one** recovery notification is emitted when the first successful check restores the service to `HEALTHY`.
+- **Fault Isolation**: Notification delivery failures never interrupt or crash monitoring probes or database writes.
+
+### Configuration (`.env`):
+```ini
+# Webhook Alerting
+ALERT_WEBHOOK_ENABLED=true
+ALERT_WEBHOOK_URL="https://hooks.slack.com/services/... or https://your-domain.com/webhook"
+ALERT_WEBHOOK_TIMEOUT_SECONDS=10.0
+
+# Email Alerting
+ALERT_EMAIL_ENABLED=true
+ALERT_EMAIL_SMTP_HOST="smtp.mailgun.org"
+ALERT_EMAIL_SMTP_PORT=587
+ALERT_EMAIL_SMTP_USER="postmaster@your-domain.com"
+ALERT_EMAIL_SMTP_PASSWORD="secretpassword"
+ALERT_EMAIL_USE_TLS=true
+ALERT_EMAIL_FROM="alerts@utms.local"
+ALERT_EMAIL_TO="ops-team@your-domain.com"
+```
+
+---
+
 ## Running Automated Tests
 
 Run the full test suite with pytest:
