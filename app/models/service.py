@@ -18,6 +18,12 @@ class Service(Base):
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     expected_status_code: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+    # State tracking & incident thresholds
+    failure_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    current_state: Mapped[str] = mapped_column(String(20), nullable=False, default="HEALTHY", index=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -31,4 +37,7 @@ class Service(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Service id={self.id} name='{self.name}' url='{self.url}' active={self.is_active}>"
+        return (
+            f"<Service id={self.id} name='{self.name}' state='{self.current_state}' "
+            f"consecutive_failures={self.consecutive_failures}/{self.failure_threshold}>"
+        )

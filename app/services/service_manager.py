@@ -16,6 +16,7 @@ async def create_service(db: AsyncSession, service_in: ServiceCreate) -> Service
         timeout_seconds=service_in.timeout_seconds,
         expected_status_code=service_in.expected_status_code,
         is_active=service_in.is_active,
+        failure_threshold=service_in.failure_threshold,
     )
     db.add(db_service)
     await db.commit()

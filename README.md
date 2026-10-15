@@ -141,6 +141,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | `/api/services/check-all` | `POST` | Manually trigger concurrent health checks on all active services |
 | `/api/services/{id}/checks` | `GET` | Historical check results with time range, status, and pagination filters |
 | `/api/services/{id}/summary` | `GET` | Aggregated service summary (uptime %, avg response time, total/success/failed counts) |
+| `/api/incidents` | `GET` | List recorded incidents (filterable by `service_id` and `status`: `OPEN`/`RESOLVED`) |
+| `/api/incidents/{id}` | `GET` | Retrieve specific incident details |
+| `/api/services/{id}/incidents` | `GET` | List all incidents for a specific monitored service |
 | `/docs` | `GET` | Interactive OpenAPI documentation (Swagger UI) |
 | `/redoc` | `GET` | ReDoc API documentation |
 

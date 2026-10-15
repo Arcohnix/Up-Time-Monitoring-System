@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.checker.runner import check_all_enabled_services, check_service
 from app.checker.schemas import CheckResult, ServiceSummary
+from app.incidents.manager import get_incidents
+from app.incidents.schemas import IncidentResponse
 from app.schemas.service import ServiceCreate, ServiceResponse, ServiceUpdate
 from app.services.checks import get_service_checks, get_service_summary
 from app.services.service_manager import (
@@ -172,6 +174,39 @@ async def get_service_health_summary(
         start_time=eval_start,
         end_time=eval_end,
     )
+
+
+@router.get(
+    "/{id}/incidents",
+    response_model=List[IncidentResponse],
+    summary="Get incidents for a specific service",
+    description="Retrieves outage and incident history for a specific service with optional status filter.",
+)
+async def get_service_incidents(
+    id: int,
+    status_filter: Optional[str] = Query(
+        None,
+        alias="status",
+        description="Filter by incident status (OPEN or RESOLVED)",
+    ),
+    skip: int = Query(0, ge=0, description="Records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
+    db: AsyncSession = Depends(get_db),
+) -> List[IncidentResponse]:
+    service = await get_service_by_id(db=db, service_id=id)
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service with id {id} not found",
+        )
+    incidents = await get_incidents(
+        db=db,
+        service_id=id,
+        status=status_filter,
+        skip=skip,
+        limit=limit,
+    )
+    return [IncidentResponse.model_validate(inc) for inc in incidents]
 
 
 @router.patch(

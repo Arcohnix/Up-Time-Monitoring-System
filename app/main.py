@@ -96,8 +96,10 @@ def create_application() -> FastAPI:
 
     # Mount API routes
     application.include_router(api_router, prefix=settings.API_V1_STR)
+    from app.api.v1.endpoints import incidents as incidents_endpoint
     from app.api.v1.endpoints import services as services_endpoint
     application.include_router(services_endpoint.router, prefix="/api/services", tags=["Services"])
+    application.include_router(incidents_endpoint.router, prefix="/api/incidents", tags=["Incidents"])
 
     return application
 

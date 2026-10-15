@@ -51,6 +51,13 @@ class ServiceBase(BaseModel):
         validation_alias=AliasChoices("is_active", "is_enabled", "enabled"),
         description="Whether active monitoring is enabled",
     )
+    failure_threshold: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices("failure_threshold", "consecutive_failure_threshold"),
+        description="Consecutive failures required before opening an incident",
+    )
 
     @field_validator("url")
     @classmethod
@@ -101,6 +108,12 @@ class ServiceUpdate(BaseModel):
         None,
         validation_alias=AliasChoices("is_active", "is_enabled", "enabled"),
     )
+    failure_threshold: Optional[int] = Field(
+        None,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices("failure_threshold", "consecutive_failure_threshold"),
+    )
 
     @field_validator("url")
     @classmethod
@@ -141,6 +154,9 @@ class ServiceResponse(BaseModel):
     timeout_seconds: int
     expected_status_code: int
     is_active: bool
+    failure_threshold: int = 3
+    consecutive_failures: int = 0
+    current_state: str = "HEALTHY"
     created_at: datetime
     updated_at: datetime
 

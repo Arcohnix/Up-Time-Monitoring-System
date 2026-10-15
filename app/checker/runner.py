@@ -136,6 +136,18 @@ async def check_service(
             db.add(db_record)
             await db.commit()
             result.id = db_record.id
+
+            # Evaluate state transitions and incident detection/recovery
+            try:
+                from app.incidents.manager import process_check_result
+                await process_check_result(db=db, service=service, result=result)
+            except Exception as inc_exc:
+                logger.error(
+                    "Incident evaluation error for service %s: %s",
+                    service.id,
+                    inc_exc,
+                    exc_info=True,
+                )
         except Exception as db_exc:
             logger.error(
                 "Database error: Failed to persist check result for service %s: %s",
@@ -210,9 +222,9 @@ async def check_all_enabled_services(
             else:
                 results.append(res)
 
-        # Safely persist completed checks
+        # Safely persist completed checks and evaluate incidents
         if persist:
-            for r in results:
+            for srv, r in zip(enabled_services, results):
                 try:
                     db_record = CheckResultModel(
                         service_id=r.service_id,
@@ -226,6 +238,19 @@ async def check_all_enabled_services(
                     db.add(db_record)
                     await db.commit()
                     r.id = db_record.id
+
+                    # Evaluate state transitions and incident detection/recovery
+                    try:
+                        from app.incidents.manager import process_check_result
+                        await process_check_result(db=db, service=srv, result=r)
+                    except Exception as inc_exc:
+                        logger.error(
+                            "Incident evaluation error for service %s: %s",
+                            srv.id,
+                            inc_exc,
+                            exc_info=True,
+                        )
+
                 except Exception as db_exc:
                     logger.error(
                         "Database error: Failed to persist check result for service %s: %s",
