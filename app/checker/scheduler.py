@@ -43,6 +43,10 @@ class MonitoringScheduler:
         self._last_checked: Dict[int, float] = {}
         self._active_tasks: Set[asyncio.Task[None]] = set()
 
+        # Heartbeat tracking for self-health and external watchdog monitoring
+        self._last_heartbeat: Optional[float] = None
+        self._ticks_count: int = 0
+
     @property
     def is_running(self) -> bool:
         """Return True if the scheduler loop is actively running."""
@@ -65,6 +69,7 @@ class MonitoringScheduler:
             self._owned_client = True
 
         self._running = True
+        self._last_heartbeat = time.time()
         self._loop_task = asyncio.create_task(self._run_loop(), name="monitoring-scheduler-loop")
         try:
             from app.core.metrics import set_scheduler_running
@@ -130,6 +135,10 @@ class MonitoringScheduler:
 
     async def tick(self) -> None:
         """Execute a single evaluation pass: query enabled services and dispatch due checks."""
+        # Update heartbeat and tick telemetry
+        self._ticks_count += 1
+        self._last_heartbeat = time.time()
+
         try:
             async with self.session_factory() as db:
                 stmt = select(Service)
@@ -225,6 +234,26 @@ class MonitoringScheduler:
             finally:
                 self._in_flight.discard(srv.id)
 
+    def get_heartbeat(self, stale_threshold_seconds: float = 30.0) -> dict:
+        """Evaluate worker heartbeat freshness and activity telemetry."""
+        now = time.time()
+        seconds_since = (now - self._last_heartbeat) if self._last_heartbeat else None
+        worker_alive = bool(
+            self._running
+            and self._last_heartbeat is not None
+            and seconds_since is not None
+            and seconds_since <= stale_threshold_seconds
+        )
+        return {
+            "scheduler_running": self._running,
+            "worker_alive": worker_alive,
+            "last_heartbeat_timestamp": self._last_heartbeat,
+            "seconds_since_last_heartbeat": round(seconds_since, 2) if seconds_since is not None else None,
+            "ticks_count": self._ticks_count,
+            "in_flight_checks": len(self._in_flight),
+            "stale_threshold_seconds": stale_threshold_seconds,
+        }
+
 
 # Global singleton scheduler instance
 _global_scheduler: Optional[MonitoringScheduler] = None
@@ -244,3 +273,20 @@ def get_scheduler(
             max_concurrency=max_concurrency or settings.SCHEDULER_MAX_CONCURRENCY,
         )
     return _global_scheduler
+
+
+def get_scheduler_heartbeat(stale_threshold_seconds: float = 30.0) -> dict:
+    """Retrieve heartbeat status from the global scheduler singleton."""
+    global _global_scheduler
+    if _global_scheduler is None:
+        return {
+            "scheduler_running": False,
+            "worker_alive": False,
+            "last_heartbeat_timestamp": None,
+            "seconds_since_last_heartbeat": None,
+            "ticks_count": 0,
+            "in_flight_checks": 0,
+            "stale_threshold_seconds": stale_threshold_seconds,
+        }
+    return _global_scheduler.get_heartbeat(stale_threshold_seconds=stale_threshold_seconds)
+

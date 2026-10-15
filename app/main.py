@@ -142,6 +142,40 @@ def create_application() -> FastAPI:
             database=database_status,
         )
 
+    # Monitoring worker heartbeat and self-health probe: GET /health/heartbeat
+    @application.get(
+        "/health/heartbeat",
+        tags=["Health"],
+        summary="Monitoring Worker Heartbeat & Self-Health",
+        description="Verifies API responsiveness, background scheduler status, and worker heartbeat freshness.",
+    )
+    def worker_heartbeat(
+        response: Response,
+        stale_threshold: float = Query(30.0, description="Max acceptable seconds since last heartbeat"),
+    ) -> dict:
+        from app.checker.scheduler import get_scheduler_heartbeat
+
+        hb = get_scheduler_heartbeat(stale_threshold_seconds=stale_threshold)
+        api_alive = True
+        scheduler_running = hb["scheduler_running"]
+        worker_alive = hb["worker_alive"]
+
+        is_healthy = api_alive and scheduler_running and worker_alive
+        if not is_healthy:
+            response.status_code = 503
+
+        return {
+            "status": "healthy" if is_healthy else "unhealthy",
+            "api_alive": api_alive,
+            "scheduler_running": scheduler_running,
+            "worker_alive": worker_alive,
+            "last_heartbeat_timestamp": hb["last_heartbeat_timestamp"],
+            "seconds_since_last_heartbeat": hb["seconds_since_last_heartbeat"],
+            "ticks_count": hb["ticks_count"],
+            "in_flight_checks": hb["in_flight_checks"],
+            "stale_threshold_seconds": stale_threshold,
+        }
+
     # Mount API routes
     application.include_router(api_router, prefix=settings.API_V1_STR)
     from app.api.v1.endpoints import dashboard as dashboard_endpoint

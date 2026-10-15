@@ -1,7 +1,13 @@
 #!/bin/sh
 set -e
 
+# If running the standalone watchdog daemon, skip database migrations and exec immediately
+if [ "$1" = "python" ] && [ "$2" = "-m" ] && [ "$3" = "watchdog.main" ]; then
+    exec "$@"
+fi
+
 # Wait for PostgreSQL connectivity if POSTGRES_SERVER is specified
+
 if [ -n "$POSTGRES_SERVER" ]; then
     PORT="${POSTGRES_PORT:-5432}"
     echo "Checking database readiness at ${POSTGRES_SERVER}:${PORT}..."

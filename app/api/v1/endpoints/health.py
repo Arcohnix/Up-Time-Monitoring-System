@@ -53,3 +53,22 @@ async def check_db_health(
         "database": "connected" if is_connected else "unreachable",
         "reachable": is_connected,
     }
+
+
+@router.get(
+    "/health/heartbeat",
+    summary="Monitoring Worker Heartbeat Status",
+    description="Explicitly tests background scheduler activity and worker heartbeat freshness.",
+)
+async def check_heartbeat(
+    stale_threshold: float = Query(30.0, description="Max acceptable seconds since last heartbeat"),
+) -> dict:
+    from app.checker.scheduler import get_scheduler_heartbeat
+
+    hb = get_scheduler_heartbeat(stale_threshold_seconds=stale_threshold)
+    is_healthy = hb["scheduler_running"] and hb["worker_alive"]
+    return {
+        "status": "healthy" if is_healthy else "unhealthy",
+        "api_alive": True,
+        **hb,
+    }

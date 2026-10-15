@@ -397,7 +397,7 @@ The workflow is structured into decoupled, concurrent and dependent jobs for fas
 │  - Python 3.13 + pip cache      │       │  - Node.js 22 + npm cache       │
 │  - pip install dev dependencies │       │  - npm ci                       │
 │  - ruff check .                 │       │  - npm run lint (oxlint)        │
-│  - pytest --verbose (66 tests)  │       │  - npm run build (Vite)         │
+│  - pytest --verbose (82 tests)  │       │  - npm run build (Vite)         │
 └────────────────┬────────────────┘       └────────────────┬────────────────┘
                  │                                         │
                  └───────────────────┬─────────────────────┘
@@ -419,7 +419,7 @@ The workflow is structured into decoupled, concurrent and dependent jobs for fas
    - **Environment**: `ubuntu-latest` with Python 3.13 and active `pip` caching.
    - **Dependencies**: Installs `requirements-dev.txt` (FastAPI, SQLAlchemy, asyncpg, Alembic, pytest, pytest-asyncio, aiosqlite, Ruff).
    - **Code Quality**: Runs `ruff check .` adhering to `pyproject.toml` linting standards.
-   - **Test Suite**: Executes all 66 async unit and integration tests with `pytest --verbose`.
+   - **Test Suite**: Executes all 82 async unit and integration tests with `pytest --verbose`.
 
 2. **Frontend Lint & Build (`frontend`)**:
    - **Environment**: `ubuntu-latest` with Node.js 22 and npm caching keyed against `frontend/package-lock.json`.
@@ -527,3 +527,151 @@ The pre-provisioned dashboard automatically visualizes:
 4. **Active Incidents**: Open incidents counter, outage timeline, and notification delivery vs failure rates.
 5. **Monitoring Worker Health**: Scheduler tick rate, in-flight concurrent probe count, and worker daemon state.
 6. **API Health**: API request throughput by normalized endpoint and status code distribution.
+
+---
+
+## Monitoring System Self-Health & External Watchdog (Phase 12)
+
+### The Problem: "Who Watches the Watcher?"
+When an uptime monitoring system crashes, deadlocks, runs out of memory, or encounters a stalled scheduler event loop, all internal monitoring silently ceases. The monitored services might go down while the monitoring system itself is unavailable to detect or report the failure.
+
+UTMS solves this reliability problem through a **decoupled, two-tier self-health verification architecture**:
+1. **Internal Worker Heartbeat Mechanism**: The scheduler loop updates a monotonic heartbeat timestamp on every execution tick.
+2. **Decoupled External Watchdog Service**: An independent probe process running in a separate failure domain (standalone container `utms_watchdog` or remote daemon) continuously verifies that the API is responsive, the scheduler is active, and the monitoring worker is not frozen.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│             Monitoring System Self-Health Architecture                 │
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │                      utms_backend (:8000)                      │   │
+│   │                                                                │   │
+│   │   ┌───────────────┐                  ┌─────────────────────┐   │   │
+│   │   │  FastAPI API  │                  │ MonitoringScheduler │   │   │
+│   │   │               │                  │                     │   │   │
+│   │   │ GET /health/  │◀─── reads ───────│ Updates Heartbeat   │   │   │
+│   │   │   heartbeat   │     telemetry    │ Timestamp on Tick   │   │   │
+│   │   └───────▲───────┘                  └─────────────────────┘   │   │
+│   └───────────┼────────────────────────────────────────────────────┘   │
+│               │ HTTP Probe (every 5s)                                  │
+│               │ (decoupled process / separate container)               │
+│   ┌───────────┴────────────────────────────────────────────────────┐   │
+│   │              utms_watchdog (ExternalWatchdog)                  │   │
+│   │                                                                │   │
+│   │   - Probes API responsiveness                                  │   │
+│   │   - Verifies scheduler_running == true                         │   │
+│   │   - Verifies worker_alive (seconds_since_heartbeat <= 30s)     │   │
+│   │   - Gated by consecutive failure threshold (default: 2)        │   │
+│   │   - Deduplicates active outage alerts                          │   │
+│   │   - Dispatches webhook alerts on OUTAGE and RECOVERY           │   │
+│   └───────────────────────────────┬────────────────────────────────┘   │
+│                                   │ Outage Alert Webhook               │
+│                                   ▼                                    │
+│                     ┌───────────────────────────┐                      │
+│                     │ External Pager / Operator │                      │
+│                     │ (Slack, PagerDuty, etc.)  │                      │
+│                     └───────────────────────────┘                      │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Internal Worker Heartbeat (`GET /health/heartbeat`)
+
+The monitoring worker exposes a dedicated health endpoint at `/health/heartbeat` and `/api/v1/health/heartbeat`:
+
+```json
+{
+  "status": "healthy",
+  "api_alive": true,
+  "scheduler_running": true,
+  "worker_alive": true,
+  "last_heartbeat_timestamp": 1792064018.60,
+  "seconds_since_last_heartbeat": 0.12,
+  "ticks_count": 142,
+  "in_flight_checks": 0,
+  "stale_threshold_seconds": 30.0
+}
+```
+
+The endpoint returns **HTTP 200 (OK)** if and only if:
+1. `api_alive == true`: The web server is responding.
+2. `scheduler_running == true`: The background scheduler daemon is running.
+3. `worker_alive == true`: The elapsed time since the last heartbeat tick is strictly within `stale_threshold_seconds` (default: 30s).
+
+If any condition fails (e.g. scheduler deadlocked, stopped, or frozen), the endpoint immediately responds with **HTTP 503 (Service Unavailable)** and `status: "unhealthy"`.
+
+---
+
+### Complete Failure Scenario Walkthrough
+
+The following sequence illustrates how the external watchdog detects and alerts when the monitoring system fails:
+
+```
+Step 1: Monitoring Service Crashes
+   Backend process terminates (OOM kill, unhandled system signal, network drop).
+                             │
+                             ▼
+Step 2: Internal Monitoring Stops
+   Scheduler tick loop ceases execution. No health checks are performed on target services.
+                             │
+                             ▼
+Step 3: External Watchdog Detects Failure
+   Watchdog executes independent probe to http://backend:8000/health/heartbeat:
+   - Probe attempt 1: ConnectionRefusedError (consecutive_failures = 1).
+   - Probe attempt 2: ConnectionRefusedError (consecutive_failures = 2).
+   Threshold (2) reached: Watchdog transitions state to DOWN.
+                             │
+                             ▼
+Step 4: Outage Alert is Generated
+   Watchdog logs critical alert and delivers webhook event:
+   {
+     "source": "UTMS_WATCHDOG",
+     "alert": {
+       "event_type": "MONITORING_SYSTEM_DOWN",
+       "target_url": "http://backend:8000",
+       "consecutive_failures": 2,
+       "error_message": "Connection failed to http://backend:8000: Connection refused"
+     }
+   }
+   Subsequent failed probes log ongoing failure but do NOT spam duplicate alerts.
+                             │
+                             ▼
+Step 5: Automatic Recovery Detection
+   Backend is restarted and scheduler ticks resume.
+   Watchdog receives HTTP 200 with worker_alive=true.
+   State transitions to HEALTHY, failure counter resets to 0, and a MONITORING_SYSTEM_RECOVERED alert is dispatched.
+```
+
+---
+
+### Watchdog Configuration
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `WATCHDOG_TARGET_URL` | `http://localhost:8000` | Target URL of the backend service to monitor |
+| `WATCHDOG_CHECK_INTERVAL_SECONDS` | `5.0` | Probing frequency in seconds |
+| `WATCHDOG_TIMEOUT_SECONDS` | `5.0` | HTTP request timeout for each probe |
+| `WATCHDOG_FAILURE_THRESHOLD` | `2` | Consecutive failed probes required before declaring `DOWN` |
+| `WATCHDOG_HEARTBEAT_STALE_THRESHOLD_SECONDS` | `30.0` | Max age in seconds of worker heartbeat before flagging stale |
+| `WATCHDOG_ALERT_WEBHOOK_URL` | `""` | Webhook URL to receive outage and recovery alerts |
+
+---
+
+### Running the External Watchdog
+
+#### 1. In Docker Compose (Recommended):
+The watchdog is configured as a standalone service in `docker-compose.yml`:
+```bash
+docker compose up -d watchdog
+```
+View watchdog logs:
+```bash
+docker logs -f utms_watchdog
+```
+
+#### 2. Standalone Python CLI:
+Run directly from terminal or an external supervisor (e.g. systemd, external VM):
+```bash
+python -m watchdog.main
+```

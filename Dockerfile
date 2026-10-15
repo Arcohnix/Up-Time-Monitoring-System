@@ -26,6 +26,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY alembic.ini .
 COPY alembic/ alembic/
 COPY app/ app/
+COPY watchdog/ watchdog/
 
 # Create non-root unprivileged user for security
 RUN useradd -m -u 1000 appuser && \

@@ -146,6 +146,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+  # ============================================================================
+  # 6. Self-Health: Decoupled External Watchdog Service
+  # ============================================================================
+  watchdog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: utms_watchdog
+    command: ["python", "-m", "watchdog.main"]
+    restart: unless-stopped
+    environment:
+      - WATCHDOG_TARGET_URL=http://backend:8000
+      - WATCHDOG_CHECK_INTERVAL_SECONDS=${WATCHDOG_CHECK_INTERVAL_SECONDS:-5.0}
+      - WATCHDOG_TIMEOUT_SECONDS=${WATCHDOG_TIMEOUT_SECONDS:-5.0}
+      - WATCHDOG_FAILURE_THRESHOLD=${WATCHDOG_FAILURE_THRESHOLD:-2}
+      - WATCHDOG_HEARTBEAT_STALE_THRESHOLD_SECONDS=${WATCHDOG_HEARTBEAT_STALE_THRESHOLD_SECONDS:-30.0}
+      - WATCHDOG_ALERT_WEBHOOK_URL=${WATCHDOG_ALERT_WEBHOOK_URL:-}
+    networks:
+      - utms_network
+    depends_on:
+      backend:
+        condition: service_healthy
+    stop_grace_period: 10s
 
 volumes:
   postgres_data:
