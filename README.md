@@ -23,14 +23,16 @@ Phase 1 establishes a clean, decoupled, production-ready backend architecture:
 UTMS/
 ├── ARCHITECTURE.md          # System architecture and incremental phase roadmap
 ├── README.md                # Project setup and documentation
-├── Dockerfile               # Backend application container definition
-├── docker-compose.yml       # Local development composition (API + PostgreSQL)
+├── Dockerfile               # Production FastAPI backend container definition
+├── docker-entrypoint.sh     # Backend entrypoint (db readiness check + auto-migrations)
+├── docker-compose.yml       # Production-ready compose configuration (3 services)
 ├── requirements.txt         # Core production dependencies
 ├── requirements-dev.txt     # Development and testing dependencies
 ├── pytest.ini               # Pytest configuration
 ├── alembic.ini              # Alembic configuration
 ├── .env.example             # Environment variable template
 ├── .gitignore               # Ignored files for git
+├── .dockerignore            # Docker build ignore rules
 ├── alembic/                 # Database migration scripts
 │   ├── env.py               # Async migration runner connected to Base metadata
 │   ├── script.py.mako       # Migration template
@@ -41,55 +43,185 @@ UTMS/
 │   │   ├── deps.py          # FastAPI dependency providers (e.g., db sessions)
 │   │   └── v1/
 │   │       ├── router.py    # API v1 aggregated router
-│   │       └── endpoints/
-│   │           └── health.py# Health check and DB reachability routes
+│   │       └── endpoints/   # Health, services, checks, incidents, dashboard endpoints
 │   ├── core/
 │   │   └── config.py        # Pydantic BaseSettings and URL normalization
 │   ├── db/
 │   │   ├── base.py          # SQLAlchemy DeclarativeBase
 │   │   └── session.py       # Async engine and session factory
-│   ├── models/              # SQLAlchemy ORM models (empty in Phase 1)
+│   ├── models/              # SQLAlchemy ORM models (Service, CheckResult, Incident)
 │   ├── schemas/             # Pydantic request/response schemas
-│   │   └── health.py        # Health response schema
-│   └── services/            # Domain logic and business services
-│       └── health.py        # Database connectivity check helper
-└── tests/                   # Automated test suite
-    ├── conftest.py          # Pytest fixtures and mock transport
-    ├── test_config.py       # Configuration unit tests
-    ├── test_db.py           # Database connectivity service tests
-    └── test_health.py       # Health endpoint integration tests
+│   └── services/            # Domain services (checker, history, scheduler, alerts, incident_manager)
+├── frontend/                # React 19 + Vite + Tailwind CSS SPA
+│   ├── Dockerfile           # Multi-stage production container build (Node + Nginx)
+│   ├── nginx.conf           # Reverse proxy, security headers, SPA fallback
+│   ├── src/                 # React components and dashboard views
+│   └── package.json         # Frontend dependencies and scripts
+└── tests/                   # Automated test suite (66 async tests)
 ```
 
 ---
 
-## Quickstart with Docker Compose
+## Production-Oriented Docker Setup (Phase 9)
 
-The easiest way to run the application with PostgreSQL is via Docker Compose:
+UTMS is fully containerized across three production-ready services defined in `docker-compose.yml`:
 
-1. **Clone and enter the repository:**
-   ```bash
-   cd UTMS
-   ```
+```
+┌────────────────────────────────────────────────────────┐
+│                   Docker Host Network                  │
+│                                                        │
+│   Frontend Port: 3000            Backend Port: 8000   │
+│          ▲                              ▲              │
+└──────────┼──────────────────────────────┼──────────────┘
+           │                              │
+┌──────────┼──────────────────────────────┼──────────────┐
+│          ▼                              ▼              │
+│   ┌───────────────┐     /api/, /health ┌───────────────┐
+│   │ utms_frontend │───────────────────▶│ utms_backend  │
+│   │ (Nginx 1.27)  │                    │ (FastAPI App) │
+│   └───────────────┘                    └───────┬───────┘
+│      React 19 SPA                              │
+│      Health: /nginx-health                     │ TCP: 5432
+│                                                ▼
+│                                        ┌───────────────┐
+│                                        │ utms_postgres │
+│                                        │ (PG 16 Alpine)│
+│                                        └───────────────┘
+│                                           Data Volume:
+│                                        utms_postgres_data
+│                                                        │
+│          Bridge Network: utms_network                  │
+└────────────────────────────────────────────────────────┘
+```
 
-2. **Create your `.env` file:**
-   ```bash
-   cp .env.example .env
-   ```
+### Services Overview:
+1. **`postgres` (`postgres:16-alpine`)**:
+   - Stores services, monitoring history, and incident records.
+   - Persistent volume: `utms_postgres_data`.
+   - Healthcheck: Probes `pg_isready -U postgres -d utms` every 5 seconds.
+2. **`backend` (Python 3.13-slim)**:
+   - Runs FastAPI ASGI application with embedded continuous asyncio monitoring scheduler.
+   - Non-root user (`appuser:1000`) for container security.
+   - Self-migrating entrypoint (`docker-entrypoint.sh`): waits for PostgreSQL socket readiness, runs `alembic upgrade head`, then executes the server.
+   - Graceful shutdown via `SIGTERM` with a 30-second `stop_grace_period` ensuring in-flight monitoring probes finish.
+   - Healthcheck: Probes `http://localhost:8000/health` every 10 seconds.
+3. **`frontend` (Node 22 build stage + Nginx 1.27 Alpine runtime)**:
+   - Multi-stage build compiles React 19 + Vite + Tailwind CSS SPA.
+   - Nginx reverse-proxies `/api/` and `/health` to `http://backend:8000/` over internal Docker network.
+   - Client-side routing fallback (`try_files $uri $uri/ /index.html;`), gzip compression, and security headers.
+   - Healthcheck: Probes `http://127.0.0.1/nginx-health` every 10 seconds.
+   - Graceful shutdown via `SIGQUIT`.
 
-3. **Start the containers:**
-   ```bash
-   docker compose up -d --build
-   ```
+---
 
-4. **Verify services are running:**
-   ```bash
-   curl http://localhost:8000/health
-   ```
+### Startup & Operation
 
-5. **Stop containers:**
-   ```bash
-   docker compose down
-   ```
+#### 1. Configuration:
+Copy the environment template and customize settings as desired:
+```bash
+cp .env.example .env
+```
+Key configurable variables:
+- `BACKEND_PORT`: Port exposed on host for the API (default: `8000`).
+- `FRONTEND_PORT`: Port exposed on host for the Web Dashboard (default: `3000`).
+- `POSTGRES_PORT`: Port exposed on host for PostgreSQL (default: `5432`).
+- `ENABLE_SCHEDULER`: Run the continuous monitoring engine (`true` / `false`).
+- `ALERT_WEBHOOK_ENABLED`, `ALERT_EMAIL_ENABLED`: Configure incident notifications.
+
+#### 2. Development Startup:
+Start the entire stack in the background with automatic dependency ordering:
+```bash
+docker compose up -d
+```
+All services wait for their dependencies to report healthy (`postgres` -> `backend` -> `frontend`).
+
+#### 3. Production-Style Build & Startup:
+Force a clean rebuild of the multi-stage images:
+```bash
+docker compose up -d --build
+```
+
+#### 4. Checking Container Status & Health:
+```bash
+docker compose ps
+```
+Output:
+```
+NAME            IMAGE                COMMAND                  SERVICE    STATUS                    PORTS
+utms_backend    utms-backend         "/usr/local/bin/dock…"   backend    Up (healthy)              0.0.0.0:8000->8000/tcp
+utms_frontend   utms-frontend        "/docker-entrypoint.…"   frontend   Up (healthy)              0.0.0.0:3000->80/tcp
+utms_postgres   postgres:16-alpine   "docker-entrypoint.s…"   postgres   Up (healthy)              0.0.0.0:5432->5432/tcp
+```
+
+#### 5. Stopping Containers:
+To gracefully stop all services:
+```bash
+docker compose down
+```
+To stop and wipe database volumes (for fresh test runs):
+```bash
+docker compose down -v
+```
+
+---
+
+### Database Migrations in Docker
+
+Alembic migrations are executed **automatically on container startup** via `docker-entrypoint.sh`. If you need to manually inspect or run migrations:
+
+- **Check current database revision:**
+  ```bash
+  docker compose exec backend alembic current
+  ```
+- **Apply migrations manually:**
+  ```bash
+  docker compose exec backend alembic upgrade head
+  ```
+- **Generate a new migration:**
+  ```bash
+  docker compose exec backend alembic revision --autogenerate -m "describe_migration"
+  ```
+
+---
+
+### Viewing Logs & Diagnostics
+
+- **Stream all logs in real-time:**
+  ```bash
+  docker compose logs -f
+  ```
+- **Inspect backend & scheduler logs:**
+  ```bash
+  docker compose logs -f backend
+  ```
+- **Inspect frontend Nginx access/error logs:**
+  ```bash
+  docker compose logs -f frontend
+  ```
+- **Inspect PostgreSQL database logs:**
+  ```bash
+  docker compose logs -f postgres
+  ```
+
+---
+
+### Troubleshooting
+
+- **Port Conflicts (`Address already in use`):**
+  If ports 8000, 3000, or 5432 are already occupied on your host, edit `.env`:
+  ```ini
+  BACKEND_PORT=8080
+  FRONTEND_PORT=3001
+  POSTGRES_PORT=5433
+  ```
+  Then run `docker compose up -d`.
+- **Database Connection Retries:**
+  On first boot, PostgreSQL may take a few seconds to initialize its storage cluster. `docker-entrypoint.sh` in the backend uses an active socket polling loop to wait until PostgreSQL is accepting TCP connections before attempting `alembic upgrade head`.
+- **Rebuilding after code changes:**
+  If you modify frontend or backend code, rebuild the containers using:
+  ```bash
+  docker compose up -d --build
+  ```
 
 ---
 

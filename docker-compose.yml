@@ -1,4 +1,7 @@
 services:
+  # ============================================================================
+  # 1. PostgreSQL Database
+  # ============================================================================
   postgres:
     image: postgres:16-alpine
     container_name: utms_postgres
@@ -11,35 +14,92 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - utms_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-utms}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
-  api:
+  # ============================================================================
+  # 2. FastAPI Backend & Continuous Monitoring Scheduler
+  # ============================================================================
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: utms_api
+    container_name: utms_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
-      - PROJECT_NAME=Uptime Monitoring System
-      - ENVIRONMENT=development
-      - DEBUG=true
-      - API_V1_STR=/api/v1
+      - PROJECT_NAME=${PROJECT_NAME:-Uptime Monitoring System}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
+      - API_V1_STR=${API_V1_STR:-/api/v1}
       - POSTGRES_SERVER=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-utms}
-    volumes:
-      - .:/app
+      - ENABLE_SCHEDULER=${ENABLE_SCHEDULER:-true}
+      - SCHEDULER_TICK_INTERVAL_SECONDS=${SCHEDULER_TICK_INTERVAL_SECONDS:-1.0}
+      - SCHEDULER_MAX_CONCURRENCY=${SCHEDULER_MAX_CONCURRENCY:-50}
+      - ALERT_WEBHOOK_ENABLED=${ALERT_WEBHOOK_ENABLED:-false}
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_WEBHOOK_TIMEOUT_SECONDS=${ALERT_WEBHOOK_TIMEOUT_SECONDS:-10.0}
+      - ALERT_EMAIL_ENABLED=${ALERT_EMAIL_ENABLED:-false}
+      - ALERT_EMAIL_SMTP_HOST=${ALERT_EMAIL_SMTP_HOST:-}
+      - ALERT_EMAIL_SMTP_PORT=${ALERT_EMAIL_SMTP_PORT:-587}
+      - ALERT_EMAIL_SMTP_USER=${ALERT_EMAIL_SMTP_USER:-}
+      - ALERT_EMAIL_SMTP_PASSWORD=${ALERT_EMAIL_SMTP_PASSWORD:-}
+      - ALERT_EMAIL_USE_TLS=${ALERT_EMAIL_USE_TLS:-true}
+      - ALERT_EMAIL_FROM=${ALERT_EMAIL_FROM:-alerts@utms.local}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+    networks:
+      - utms_network
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 30s
+
+  # ============================================================================
+  # 3. Production Frontend SPA (React + Vite + Nginx)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: utms_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - utms_network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    stop_grace_period: 15s
 
 volumes:
   postgres_data:
+    name: utms_postgres_data
+
+networks:
+  utms_network:
+    name: utms_network
+    driver: bridge
