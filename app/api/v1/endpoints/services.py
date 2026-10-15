@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.checker.runner import check_all_enabled_services, check_service
+from app.checker.schemas import CheckResult
 from app.schemas.service import ServiceCreate, ServiceResponse, ServiceUpdate
 from app.services.service_manager import (
     create_service,
@@ -46,6 +48,24 @@ async def list_services(
     return [ServiceResponse.model_validate(s) for s in services]
 
 
+@router.post(
+    "/check-all",
+    response_model=List[CheckResult],
+    summary="Manually trigger health checks for all enabled services",
+    description="Executes concurrent health checks on all active services and returns their structured results.",
+)
+async def check_all_services_endpoint(
+    persist: bool = Query(True, description="Whether to store check results in the database"),
+    concurrency: int = Query(10, ge=1, le=100, description="Max concurrent checks"),
+    db: AsyncSession = Depends(get_db),
+) -> List[CheckResult]:
+    return await check_all_enabled_services(
+        db=db,
+        persist=persist,
+        max_concurrency=concurrency,
+    )
+
+
 @router.get(
     "/{id}",
     response_model=ServiceResponse,
@@ -63,6 +83,26 @@ async def get_service(
             detail=f"Service with id {id} not found",
         )
     return ServiceResponse.model_validate(service)
+
+
+@router.post(
+    "/{id}/check",
+    response_model=CheckResult,
+    summary="Manually trigger a health check for a specific service",
+    description="Executes a live health check for the specified service and returns the structured result.",
+)
+async def check_single_service_endpoint(
+    id: int,
+    persist: bool = Query(True, description="Whether to store check result in the database"),
+    db: AsyncSession = Depends(get_db),
+) -> CheckResult:
+    service = await get_service_by_id(db=db, service_id=id)
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service with id {id} not found",
+        )
+    return await check_service(service=service, db=db, persist=persist)
 
 
 @router.patch(

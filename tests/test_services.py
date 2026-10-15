@@ -230,3 +230,39 @@ async def test_delete_service_not_found(client: AsyncClient):
     """Verify deleting nonexistent service returns 404."""
     response = await client.delete("/api/services/999999")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_manual_check_endpoints(client: AsyncClient):
+    """Verify invoking manual check endpoints via HTTP API."""
+    from unittest.mock import patch
+    from app.checker.schemas import CheckResult
+
+    # Create service
+    created = await client.post("/api/services", json={"name": "API Check Target", "url": "https://target.com"})
+    service_id = created.json()["id"]
+
+    mock_result = CheckResult(
+        service_id=service_id,
+        success=True,
+        status_code=200,
+        response_time_ms=45.2,
+    )
+
+    with patch("app.api.v1.endpoints.services.check_service", return_value=mock_result), \
+         patch("app.api.v1.endpoints.services.check_all_enabled_services", return_value=[mock_result]):
+        # Test single service check
+        res_single = await client.post(f"/api/services/{service_id}/check")
+        assert res_single.status_code == 200
+        data_single = res_single.json()
+        assert data_single["service_id"] == service_id
+        assert data_single["success"] is True
+        assert data_single["status_code"] == 200
+
+        # Test check-all endpoint
+        res_all = await client.post("/api/services/check-all")
+        assert res_all.status_code == 200
+        data_all = res_all.json()
+        assert len(data_all) == 1
+        assert data_all[0]["service_id"] == service_id
+
