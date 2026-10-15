@@ -144,6 +144,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | `/api/incidents` | `GET` | List recorded incidents (filterable by `service_id` and `status`: `OPEN`/`RESOLVED`) |
 | `/api/incidents/{id}` | `GET` | Retrieve specific incident details |
 | `/api/services/{id}/incidents` | `GET` | List all incidents for a specific monitored service |
+| `/api/dashboard` | `GET` | Aggregated dashboard overview metrics, service cards, active incidents, and latency history |
 | `/docs` | `GET` | Interactive OpenAPI documentation (Swagger UI) |
 | `/redoc` | `GET` | ReDoc API documentation |
 
@@ -191,6 +192,33 @@ ALERT_EMAIL_USE_TLS=true
 ALERT_EMAIL_FROM="alerts@utms.local"
 ALERT_EMAIL_TO="ops-team@your-domain.com"
 ```
+
+---
+
+## Frontend Dashboard SPA (Phase 8)
+
+UTMS provides a React + Vite Single-Page Application (SPA) located in `frontend/` featuring:
+- **System Overview Banner**: Live `SYSTEM ONLINE` / `DEGRADED` / `MAJOR OUTAGE` status indicator.
+- **Top Metric Cards**: Aggregated uptime percentage, overall average latency, and monitored service counts.
+- **Interactive Services Table**: Real-time status indicators (Healthy, Degraded, Down, Disabled), uptime %, average latency, quick manual check trigger, and deletion.
+- **Response Time Chart**: Visualizing latency trends across probes with interactive tooltips.
+- **Active Incidents Alerting**: Surfacing ongoing outages with failure counts and error reasons.
+- **Service Registration**: In-app modal dialog to register new monitored endpoints.
+
+### Running the Frontend in Development:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173). API requests to `/api` and `/health` are automatically proxied to `http://localhost:8000`.
+
+### Building for Production:
+```bash
+cd frontend
+npm run build
+```
+Once built, the FastAPI backend will automatically serve the dashboard application at `http://localhost:8000/dashboard/`.
 
 ---
 

@@ -96,10 +96,19 @@ def create_application() -> FastAPI:
 
     # Mount API routes
     application.include_router(api_router, prefix=settings.API_V1_STR)
+    from app.api.v1.endpoints import dashboard as dashboard_endpoint
     from app.api.v1.endpoints import incidents as incidents_endpoint
     from app.api.v1.endpoints import services as services_endpoint
     application.include_router(services_endpoint.router, prefix="/api/services", tags=["Services"])
     application.include_router(incidents_endpoint.router, prefix="/api/incidents", tags=["Incidents"])
+    application.include_router(dashboard_endpoint.router, prefix="/api/dashboard", tags=["Dashboard"])
+
+    # Optionally serve compiled React SPA if built
+    import os
+    frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+    if os.path.exists(frontend_dist):
+        from fastapi.staticfiles import StaticFiles
+        application.mount("/dashboard", StaticFiles(directory=frontend_dist, html=True), name="dashboard")
 
     return application
 

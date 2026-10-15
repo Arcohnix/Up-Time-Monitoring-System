@@ -53,3 +53,9 @@ Thumbs.db
 
 # Docker
 .docker/
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.local
+
