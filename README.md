@@ -139,6 +139,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | `/api/services/{id}` | `DELETE` | Remove a monitored service |
 | `/api/services/{id}/check` | `POST` | Manually trigger health check on a specific service |
 | `/api/services/check-all` | `POST` | Manually trigger concurrent health checks on all active services |
+| `/api/services/{id}/checks` | `GET` | Historical check results with time range, status, and pagination filters |
+| `/api/services/{id}/summary` | `GET` | Aggregated service summary (uptime %, avg response time, total/success/failed counts) |
 | `/docs` | `GET` | Interactive OpenAPI documentation (Swagger UI) |
 | `/redoc` | `GET` | ReDoc API documentation |
 
