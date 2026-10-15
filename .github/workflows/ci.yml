@@ -1,0 +1,99 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================================
+  # 1. Backend Linting & Automated Tests (Unit & Integration)
+  # ============================================================================
+  backend:
+    name: Backend Tests & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint and format check (Ruff)
+        run: |
+          ruff check .
+
+      - name: Run unit and integration tests (Pytest)
+        run: |
+          pytest --verbose
+
+  # ============================================================================
+  # 2. Frontend Linting & Production Build
+  # ============================================================================
+  frontend:
+    name: Frontend Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: |
+          npm ci
+
+      - name: Lint frontend code (oxlint)
+        working-directory: ./frontend
+        run: |
+          npm run lint
+
+      - name: Build frontend SPA (Vite)
+        working-directory: ./frontend
+        run: |
+          npm run build
+
+  # ============================================================================
+  # 3. Docker Build Validation
+  # ============================================================================
+  docker:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config
+
+      - name: Build Backend Docker Image
+        run: |
+          docker build -t utms-backend:ci .
+
+      - name: Build Frontend Docker Image
+        run: |
+          docker build -t utms-frontend:ci ./frontend

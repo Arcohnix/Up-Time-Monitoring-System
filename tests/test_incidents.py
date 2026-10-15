@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.checker.schemas import CheckResult
-from app.incidents.manager import get_active_incident, get_incidents, process_check_result
+from app.incidents.manager import get_active_incident, process_check_result
 from app.incidents.schemas import IncidentStatus, ServiceState
 from app.models.incident import IncidentModel
 from app.models.service import Service

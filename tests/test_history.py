@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 import httpx
 import pytest
 from httpx import AsyncClient
@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.checker.runner import check_all_enabled_services, check_service
 from app.models.check_result import CheckResultModel
 from app.models.service import Service
-from app.services.checks import get_service_checks, get_service_summary
 
 
 @pytest.mark.asyncio

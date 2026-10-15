@@ -1,5 +1,4 @@
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 from fastapi import APIRouter, Depends
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession

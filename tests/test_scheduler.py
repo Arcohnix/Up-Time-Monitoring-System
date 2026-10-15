@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.checker.runner import check_service
 from app.checker.scheduler import MonitoringScheduler
 from app.models.check_result import CheckResultModel
 from app.models.service import Service

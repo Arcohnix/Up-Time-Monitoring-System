@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ShieldAlert, ExternalLink } from 'lucide-react';
 import { getIncidents } from '../api';
 
 export default function IncidentsView({ services = [], onSelectService }) {
   const [incidents, setIncidents] = useState([]);
   const [filter, setFilter] = useState('ALL'); // ALL, OPEN, RESOLVED
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   // Map serviceId to service object
   const serviceMap = React.useMemo(() => {
@@ -21,11 +19,8 @@ export default function IncidentsView({ services = [], onSelectService }) {
     try {
       const data = await getIncidents({ limit: 100 });
       setIncidents(data || []);
-      setError(null);
-    } catch (err) {
-      setError(err.message || 'Failed to load incidents');
-    } finally {
-      setLoading(false);
+    } catch {
+      // Handled silently for periodic polling
     }
   };
 

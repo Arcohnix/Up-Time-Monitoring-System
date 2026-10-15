@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function StatusBadge({ state, isActive = true, size = 'sm' }) {
+export default function StatusBadge({ state, isActive = true }) {
   if (!isActive) {
     return (
       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">

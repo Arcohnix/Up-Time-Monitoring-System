@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import List
@@ -9,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.alerts.base import AlertEvent, AlertEventType, BaseNotificationProvider
 from app.alerts.providers.email import EmailNotificationProvider
 from app.alerts.providers.webhook import WebhookNotificationProvider
-from app.alerts.service import AlertService, get_alert_service, reset_alert_service
+from app.alerts.service import AlertService
 from app.checker.schemas import CheckResult
 from app.incidents.manager import process_check_result
 from app.incidents.schemas import IncidentStatus, ServiceState

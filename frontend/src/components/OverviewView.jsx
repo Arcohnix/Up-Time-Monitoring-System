@@ -4,7 +4,6 @@ import {
   Edit2,
   Trash2,
   Power,
-  ExternalLink,
   Search,
   Activity,
   Plus,
@@ -30,12 +29,10 @@ export default function OverviewView({
   if (!dashboardData) return null;
 
   const {
-    system_status,
     overall_uptime_percentage,
     overall_avg_response_time_ms,
     total_services,
     healthy_services,
-    degraded_services,
     down_services,
     services = [],
     recent_response_times = [],

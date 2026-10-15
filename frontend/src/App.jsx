@@ -5,7 +5,6 @@ import {
   Plus,
   Play,
   ShieldAlert,
-  Server,
   AlertTriangle,
 } from 'lucide-react';
 import {
@@ -24,9 +23,9 @@ export default function App() {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const autoRefresh = true;
   const [error, setError] = useState(null);
-  const [lastSync, setLastSync] = useState(new Date());
+  const [lastSync, setLastSync] = useState(() => new Date());
 
   // Navigation states: 'OVERVIEW', 'INCIDENTS', 'SERVICE_DETAIL'
   const [activeTab, setActiveTab] = useState('OVERVIEW');

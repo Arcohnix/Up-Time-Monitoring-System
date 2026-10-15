@@ -21,6 +21,9 @@ Phase 1 establishes a clean, decoupled, production-ready backend architecture:
 
 ```
 UTMS/
+├── .github/                 # GitHub configurations & automation
+│   └── workflows/
+│       └── ci.yml           # CI Pipeline (Backend, Frontend, Docker validation)
 ├── ARCHITECTURE.md          # System architecture and incremental phase roadmap
 ├── README.md                # Project setup and documentation
 ├── Dockerfile               # Production FastAPI backend container definition
@@ -29,6 +32,7 @@ UTMS/
 ├── requirements.txt         # Core production dependencies
 ├── requirements-dev.txt     # Development and testing dependencies
 ├── pytest.ini               # Pytest configuration
+├── pyproject.toml           # Python tool configurations (Ruff linter)
 ├── alembic.ini              # Alembic configuration
 ├── .env.example             # Environment variable template
 ├── .gitignore               # Ignored files for git
@@ -364,4 +368,81 @@ pytest
 To run with coverage reporting:
 ```bash
 pytest --verbose
+```
+
+---
+
+## Continuous Integration Pipeline (Phase 10)
+
+UTMS features an automated, production-grade Continuous Integration (CI) pipeline configured via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+### Trigger Conditions:
+- **Pull Requests**: Automatically triggers on any pull request targeting `main`.
+- **Pushes**: Automatically triggers on direct commits or merges to `main`.
+
+### Pipeline Architecture:
+The workflow is structured into decoupled, concurrent and dependent jobs for fast feedback, clear failure isolation, and resource efficiency:
+
+```
+┌─────────────────────────────────┐       ┌─────────────────────────────────┐
+│     Backend Tests & Lint        │       │     Frontend Lint & Build       │
+│                                 │       │                                 │
+│  - Python 3.13 + pip cache      │       │  - Node.js 22 + npm cache       │
+│  - pip install dev dependencies │       │  - npm ci                       │
+│  - ruff check .                 │       │  - npm run lint (oxlint)        │
+│  - pytest --verbose (66 tests)  │       │  - npm run build (Vite)         │
+└────────────────┬────────────────┘       └────────────────┬────────────────┘
+                 │                                         │
+                 └───────────────────┬─────────────────────┘
+                                     │
+                                     ▼
+                     ┌─────────────────────────────────┐
+                     │    Docker Build Validation      │
+                     │                                 │
+                     │  - Set up Docker Buildx         │
+                     │  - docker compose config        │
+                     │  - docker build backend         │
+                     │  - docker build frontend        │
+                     └─────────────────────────────────┘
+```
+
+### Pipeline Stages & Checks:
+
+1. **Backend Tests & Lint (`backend`)**:
+   - **Environment**: `ubuntu-latest` with Python 3.13 and active `pip` caching.
+   - **Dependencies**: Installs `requirements-dev.txt` (FastAPI, SQLAlchemy, asyncpg, Alembic, pytest, pytest-asyncio, aiosqlite, Ruff).
+   - **Code Quality**: Runs `ruff check .` adhering to `pyproject.toml` linting standards.
+   - **Test Suite**: Executes all 66 async unit and integration tests with `pytest --verbose`.
+
+2. **Frontend Lint & Build (`frontend`)**:
+   - **Environment**: `ubuntu-latest` with Node.js 22 and npm caching keyed against `frontend/package-lock.json`.
+   - **Dependencies**: Installs reproducible dependencies cleanly with `npm ci`.
+   - **Static Analysis**: Runs `npm run lint` (`oxlint`) checking for syntax anomalies, unused references, and React rules.
+   - **Production Bundling**: Runs `npm run build` (`vite build`) producing minified production assets.
+
+3. **Docker Build Validation (`docker`)**:
+   - **Dependency**: Runs only after `backend` and `frontend` jobs pass (`needs: [backend, frontend]`).
+   - **Compose Validation**: Copies `.env.example` to `.env` and validates syntax and service networking with `docker compose config`.
+   - **Container Builds**: Executes `docker build` on both backend (`Dockerfile`) and frontend (`frontend/Dockerfile`) multi-stage definitions.
+
+### Running CI Checks Locally:
+
+Developers can replicate the exact GitHub Actions pipeline before opening a pull request:
+
+```bash
+# 1. Backend Linting & Tests
+ruff check .
+pytest --verbose
+
+# 2. Frontend Linting & Build
+cd frontend
+npm run lint
+npm run build
+cd ..
+
+# 3. Docker Compose & Image Builds
+cp .env.example .env
+docker compose config
+docker build -t utms-backend:ci .
+docker build -t utms-frontend:ci ./frontend
 ```
