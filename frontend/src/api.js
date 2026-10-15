@@ -1,89 +1,122 @@
 const BASE_URL = import.meta.env.VITE_API_URL || '';
 
-/**
- * Fetch dashboard aggregated overview metrics
- */
-export async function fetchDashboard() {
-  const res = await fetch(`${BASE_URL}/api/dashboard`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch dashboard data: HTTP ${res.status}`);
+async function request(endpoint, options = {}) {
+  const url = `${BASE_URL}${endpoint}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+
+    if (!res.ok) {
+      let errorMessage = `HTTP ${res.status} ${res.statusText}`;
+      try {
+        const errorData = await res.json();
+        if (errorData.detail) {
+          errorMessage = typeof errorData.detail === 'string'
+            ? errorData.detail
+            : JSON.stringify(errorData.detail);
+        }
+      } catch {
+        // Fallback to status text
+      }
+      throw new Error(errorMessage);
+    }
+
+    // 204 No Content
+    if (res.status === 204) return null;
+    return await res.json();
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to monitoring API');
+    }
+    throw err;
   }
-  return res.json();
 }
 
 /**
- * Register a new monitored service
+ * System Health
  */
-export async function createService(serviceData) {
-  const res = await fetch(`${BASE_URL}/api/services`, {
+export async function getSystemHealth() {
+  return request('/health');
+}
+
+/**
+ * Dashboard Overview Aggregation
+ */
+export async function getDashboardOverview() {
+  return request('/api/dashboard');
+}
+
+/**
+ * Services CRUD
+ */
+export async function getServices() {
+  return request('/api/services');
+}
+
+export async function getService(id) {
+  return request(`/api/services/${id}`);
+}
+
+export async function createService(data) {
+  return request('/api/services', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(serviceData),
+    body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Failed to create service: HTTP ${res.status}`);
-  }
-  return res.json();
 }
 
-/**
- * Delete a monitored service
- */
+export async function updateService(id, data) {
+  return request(`/api/services/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteService(id) {
-  const res = await fetch(`${BASE_URL}/api/services/${id}`, {
+  return request(`/api/services/${id}`, {
     method: 'DELETE',
   });
-  if (!res.ok) {
-    throw new Error(`Failed to delete service: HTTP ${res.status}`);
-  }
-  return res.json();
 }
 
 /**
- * Manually trigger health check for a specific service
+ * Service Checks & Summary
  */
 export async function triggerServiceCheck(id) {
-  const res = await fetch(`${BASE_URL}/api/services/${id}/check`, {
+  return request(`/api/services/${id}/check`, {
     method: 'POST',
   });
-  if (!res.ok) {
-    throw new Error(`Health check probe failed: HTTP ${res.status}`);
-  }
-  return res.json();
 }
 
-/**
- * Manually trigger concurrent health checks on all active services
- */
 export async function triggerCheckAll() {
-  const res = await fetch(`${BASE_URL}/api/services/check-all`, {
+  return request('/api/services/check-all', {
     method: 'POST',
   });
-  if (!res.ok) {
-    throw new Error(`Check all failed: HTTP ${res.status}`);
-  }
-  return res.json();
+}
+
+export async function getServiceChecks(id, { limit = 50, skip = 0, success = null } = {}) {
+  const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
+  if (success !== null) params.append('success', String(success));
+  return request(`/api/services/${id}/checks?${params.toString()}`);
+}
+
+export async function getServiceSummary(id) {
+  return request(`/api/services/${id}/summary`);
 }
 
 /**
- * Fetch check history for a specific service
+ * Incidents
  */
-export async function fetchServiceChecks(id, limit = 30) {
-  const res = await fetch(`${BASE_URL}/api/services/${id}/checks?limit=${limit}`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch service history: HTTP ${res.status}`);
-  }
-  return res.json();
+export async function getIncidents({ status = null, serviceId = null, limit = 50 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (status) params.append('status', status);
+  if (serviceId) params.append('service_id', String(serviceId));
+  return request(`/api/incidents?${params.toString()}`);
 }
 
-/**
- * Fetch incidents list
- */
-export async function fetchIncidents(limit = 20) {
-  const res = await fetch(`${BASE_URL}/api/incidents?limit=${limit}`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch incidents: HTTP ${res.status}`);
-  }
-  return res.json();
+export async function getServiceIncidents(serviceId) {
+  return request(`/api/services/${serviceId}/incidents`);
 }

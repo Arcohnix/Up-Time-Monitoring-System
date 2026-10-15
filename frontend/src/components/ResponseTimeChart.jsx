@@ -1,90 +1,97 @@
 import React, { useState } from 'react';
 
-export default function ResponseTimeChart({ points = [] }) {
-  const [hoveredPoint, setHoveredPoint] = useState(null);
+export default function ResponseTimeChart({ points = [], height = 180, showStats = true }) {
+  const [hovered, setHovered] = useState(null);
 
   if (!points || points.length === 0) {
     return (
-      <div style={{
-        height: '180px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'var(--text-dim)',
-        fontSize: '0.875rem',
-        border: '1px dashed var(--border)',
-        borderRadius: '8px',
-      }}>
-        No latency data recorded yet. Automatic checks will plot here shortly.
+      <div
+        style={{ height }}
+        className="w-full flex items-center justify-center border border-dashed border-zinc-800 rounded-lg text-zinc-500 text-xs font-mono"
+      >
+        No latency data recorded in this time window
       </div>
     );
   }
 
-  // Filter valid latency points
-  const validPoints = points.filter(p => typeof p.response_time_ms === 'number' && p.response_time_ms >= 0);
-  if (validPoints.length === 0) {
+  // Filter valid points
+  const valid = points.filter((p) => {
+    const lat = p.response_time_ms;
+    return typeof lat === 'number' && lat >= 0;
+  });
+
+  if (valid.length === 0) {
     return (
-      <div style={{
-        height: '180px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'var(--text-dim)',
-      }}>
+      <div
+        style={{ height }}
+        className="w-full flex items-center justify-center border border-dashed border-zinc-800 rounded-lg text-zinc-500 text-xs font-mono"
+      >
         Waiting for completed health probes...
       </div>
     );
   }
 
+  const latencies = valid.map((p) => p.response_time_ms);
+  const minVal = Math.min(...latencies);
+  const maxVal = Math.max(...latencies, 20);
+  const avgVal = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+
   const width = 800;
-  const height = 180;
   const paddingX = 40;
-  const paddingY = 25;
+  const paddingY = 24;
 
-  const maxLatency = Math.max(...validPoints.map(p => p.response_time_ms), 50);
-  const minLatency = 0;
-
-  // Scale functions
-  const getX = (index) => {
-    if (validPoints.length === 1) return width / 2;
-    return paddingX + (index / (validPoints.length - 1)) * (width - 2 * paddingX);
+  const getX = (idx) => {
+    if (valid.length === 1) return width / 2;
+    return paddingX + (idx / (valid.length - 1)) * (width - 2 * paddingX);
   };
 
   const getY = (val) => {
-    const clamped = Math.max(minLatency, Math.min(val, maxLatency));
-    return height - paddingY - ((clamped - minLatency) / (maxLatency - minLatency)) * (height - 2 * paddingY);
+    const clamped = Math.max(0, Math.min(val, maxVal));
+    return height - paddingY - (clamped / maxVal) * (height - 2 * paddingY);
   };
 
-  // Generate SVG path coordinates
-  const coords = validPoints.map((p, idx) => ({
+  const coords = valid.map((p, idx) => ({
     x: getX(idx),
     y: getY(p.response_time_ms),
     raw: p,
   }));
 
-  const linePath = coords.reduce((acc, curr, idx) => {
-    return idx === 0 ? `M ${curr.x} ${curr.y}` : `${acc} L ${curr.x} ${curr.y}`;
-  }, '');
+  const lineD = coords.reduce(
+    (acc, c, idx) => (idx === 0 ? `M ${c.x} ${c.y}` : `${acc} L ${c.x} ${c.y}`),
+    ''
+  );
 
-  const areaPath = `${linePath} L ${coords[coords.length - 1].x} ${height - paddingY} L ${coords[0].x} ${height - paddingY} Z`;
+  const areaD = `${lineD} L ${coords[coords.length - 1].x} ${height - paddingY} L ${coords[0].x} ${height - paddingY} Z`;
 
   return (
-    <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
+    <div className="relative w-full">
+      {/* Top summary stats */}
+      {showStats && (
+        <div className="flex items-center justify-end gap-3 mb-2 text-xs font-mono text-zinc-400">
+          <span>Min: <span className="text-zinc-200">{Math.round(minVal)}ms</span></span>
+          <span className="text-zinc-700">•</span>
+          <span>Avg: <span className="text-cyan-400">{avgVal}ms</span></span>
+          <span className="text-zinc-700">•</span>
+          <span>Max: <span className="text-zinc-200">{Math.round(maxVal)}ms</span></span>
+        </div>
+      )}
+
+      {/* SVG Canvas */}
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: '100%', height: 'auto', display: 'block' }}
+        className="w-full h-auto block select-none"
       >
         <defs>
-          <linearGradient id="latencyGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.35" />
+          <linearGradient id="rtGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
             <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
           </linearGradient>
         </defs>
 
-        {/* Horizontal grid lines */}
+        {/* Grid lines */}
         {[0, 0.5, 1].map((pct, i) => {
           const y = height - paddingY - pct * (height - 2 * paddingY);
-          const labelVal = Math.round(minLatency + pct * (maxLatency - minLatency));
+          const label = Math.round(pct * maxVal);
           return (
             <g key={i}>
               <line
@@ -92,81 +99,74 @@ export default function ResponseTimeChart({ points = [] }) {
                 y1={y}
                 x2={width - paddingX}
                 y2={y}
-                stroke="var(--border)"
+                stroke="#27272a"
                 strokeDasharray="4 4"
                 strokeWidth="1"
               />
               <text
                 x={paddingX - 8}
-                y={y + 4}
-                fill="var(--text-dim)"
+                y={y + 3}
+                fill="#71717a"
                 fontSize="10"
                 textAnchor="end"
-                className="mono"
+                className="font-mono"
               >
-                {labelVal}ms
+                {label}ms
               </text>
             </g>
           );
         })}
 
-        {/* Area fill */}
-        <path d={areaPath} fill="url(#latencyGradient)" />
+        {/* Area */}
+        <path d={areaD} fill="url(#rtGradient)" />
 
-        {/* Line stroke */}
+        {/* Line */}
         <path
-          d={linePath}
+          d={lineD}
           fill="none"
           stroke="#06b6d4"
-          strokeWidth="2.5"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
         {/* Interactive points */}
-        {coords.map((pt, idx) => {
-          const isFailed = !pt.raw.success;
-          const isHovered = hoveredPoint && hoveredPoint.raw.id === pt.raw.id;
+        {coords.map((c, i) => {
+          const isFailed = !c.raw.success;
+          const isHovered = hovered && hovered.raw.id === c.raw.id;
           return (
             <circle
-              key={idx}
-              cx={pt.x}
-              cy={pt.y}
-              r={isHovered ? 6 : (isFailed ? 4.5 : 3)}
-              fill={isFailed ? 'var(--red)' : '#06b6d4'}
-              stroke="#0a0d14"
+              key={i}
+              cx={c.x}
+              cy={c.y}
+              r={isHovered ? 5.5 : (isFailed ? 4 : 2.5)}
+              fill={isFailed ? '#f43f5e' : '#06b6d4'}
+              stroke="#09090b"
               strokeWidth="1.5"
-              style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
-              onMouseEnter={() => setHoveredPoint(pt)}
-              onMouseLeave={() => setHoveredPoint(null)}
+              className="cursor-pointer transition-all duration-150"
+              onMouseEnter={() => setHovered(c)}
+              onMouseLeave={() => setHovered(null)}
             />
           );
         })}
       </svg>
 
-      {/* Tooltip */}
-      {hoveredPoint && (
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          right: '20px',
-          backgroundColor: '#161e2e',
-          border: '1px solid var(--border-light)',
-          borderRadius: '6px',
-          padding: '6px 12px',
-          fontSize: '0.75rem',
-          pointerEvents: 'none',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-          zIndex: 10,
-        }}>
-          <div style={{ color: 'var(--text-main)', fontWeight: 600 }}>
-            {hoveredPoint.raw.service_name || `Service #${hoveredPoint.raw.service_id}`}
+      {/* Floating Tooltip */}
+      {hovered && (
+        <div
+          className="absolute z-20 top-2 right-4 bg-zinc-900 border border-zinc-700/80 rounded-md px-3 py-2 text-xs shadow-xl pointer-events-none font-mono"
+        >
+          <div className="text-zinc-200 font-semibold mb-0.5">
+            {hovered.raw.service_name || `Service #${hovered.raw.service_id}`}
           </div>
-          <div style={{ color: '#06b6d4', marginTop: '2px' }} className="mono">
-            {hoveredPoint.raw.response_time_ms} ms {hoveredPoint.raw.status_code ? `(HTTP ${hoveredPoint.raw.status_code})` : ''}
+          <div className="flex items-center gap-1.5 text-cyan-400">
+            <span>{hovered.raw.response_time_ms}ms</span>
+            {hovered.raw.status_code && (
+              <span className="text-zinc-400">(HTTP {hovered.raw.status_code})</span>
+            )}
           </div>
-          <div style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>
-            {new Date(hoveredPoint.raw.timestamp).toLocaleTimeString()}
+          <div className="text-zinc-500 text-[11px] mt-0.5">
+            {new Date(hovered.raw.timestamp || hovered.raw.checked_at).toLocaleTimeString()}
           </div>
         </div>
       )}

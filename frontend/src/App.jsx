@@ -1,46 +1,54 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  Activity,
   RefreshCw,
   Plus,
   Play,
-  Trash2,
-  ExternalLink,
-  AlertTriangle,
-  CheckCircle,
-  Activity,
-  Server,
-  Clock,
   ShieldAlert,
+  Server,
+  AlertTriangle,
 } from 'lucide-react';
 import {
-  fetchDashboard,
+  getDashboardOverview,
   triggerServiceCheck,
   triggerCheckAll,
+  updateService,
   deleteService,
 } from './api';
-import ResponseTimeChart from './components/ResponseTimeChart';
-import AddServiceModal from './components/AddServiceModal';
+import OverviewView from './components/OverviewView';
+import ServiceDetailView from './components/ServiceDetailView';
+import IncidentsView from './components/IncidentsView';
+import ServiceModal from './components/ServiceModal';
 
 export default function App() {
-  const [data, setData] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [checkingServiceId, setCheckingServiceId] = useState(null);
-  const [checkingAll, setCheckingAll] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [lastSync, setLastSync] = useState(new Date());
+
+  // Navigation states: 'OVERVIEW', 'INCIDENTS', 'SERVICE_DETAIL'
+  const [activeTab, setActiveTab] = useState('OVERVIEW');
+  const [selectedServiceId, setSelectedServiceId] = useState(null);
+
+  // Probing states
+  const [probingId, setProbingId] = useState(null);
+  const [probingAll, setProbingAll] = useState(false);
+
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState(null);
 
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const result = await fetchDashboard();
-      setData(result);
+      const data = await getDashboardOverview();
+      setDashboardData(data);
       setError(null);
-      setLastUpdated(new Date());
+      setLastSync(new Date());
     } catch (err) {
-      setError(err.message || 'Failed to connect to backend server');
+      setError(err.message || 'Failed to connect to monitoring API');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -52,7 +60,7 @@ export default function App() {
     loadData();
   }, [loadData]);
 
-  // Polling loop
+  // Background polling loop
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
@@ -61,479 +69,257 @@ export default function App() {
     return () => clearInterval(interval);
   }, [autoRefresh, loadData]);
 
-  // Trigger manual single check
-  const handleCheckService = async (serviceId, e) => {
-    e.stopPropagation();
-    setCheckingServiceId(serviceId);
+  // Single service probe
+  const handleTriggerCheck = async (serviceId) => {
+    setProbingId(serviceId);
     try {
       await triggerServiceCheck(serviceId);
       await loadData(true);
     } catch (err) {
-      alert(`Check failed: ${err.message}`);
+      alert(`Probe failed: ${err.message}`);
     } finally {
-      setCheckingServiceId(null);
+      setProbingId(null);
     }
   };
 
-  // Trigger check all
-  const handleCheckAll = async () => {
-    setCheckingAll(true);
+  // Check all active services
+  const handleTriggerCheckAll = async () => {
+    setProbingAll(true);
     try {
       await triggerCheckAll();
       await loadData(true);
     } catch (err) {
       alert(`Check all failed: ${err.message}`);
     } finally {
-      setCheckingAll(false);
+      setProbingAll(false);
+    }
+  };
+
+  // Enable/disable service
+  const handleToggleActive = async (serviceId, nextActiveState) => {
+    try {
+      await updateService(serviceId, { is_active: nextActiveState });
+      await loadData(true);
+    } catch (err) {
+      alert(`Failed to update state: ${err.message}`);
     }
   };
 
   // Delete service
-  const handleDeleteService = async (serviceId, serviceName, e) => {
-    e.stopPropagation();
+  const handleDeleteService = async (serviceId, serviceName) => {
     if (!window.confirm(`Are you sure you want to delete "${serviceName}"?`)) return;
     try {
       await deleteService(serviceId);
+      if (selectedServiceId === serviceId) {
+        setSelectedServiceId(null);
+        setActiveTab('OVERVIEW');
+      }
       await loadData(true);
     } catch (err) {
-      alert(`Failed to delete: ${err.message}`);
+      alert(`Failed to delete service: ${err.message}`);
     }
   };
 
-  // Status dot & badge helper
-  const getStatusBadge = (state, isActive) => {
-    if (!isActive) {
-      return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-          <span className="dot-gray" />
-          <span>Disabled</span>
-        </span>
-      );
-    }
-    switch (state) {
-      case 'HEALTHY':
-        return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--green)', fontSize: '0.85rem' }}>
-            <span className="dot-green" />
-            <span>Healthy</span>
-          </span>
-        );
-      case 'FAILING':
-        return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--yellow)', fontSize: '0.85rem' }}>
-            <span className="dot-yellow" />
-            <span>Degraded</span>
-          </span>
-        );
-      case 'DOWN':
-        return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--red)', fontSize: '0.85rem', fontWeight: 600 }}>
-            <span className="dot-red" />
-            <span>Down</span>
-          </span>
-        );
-      default:
-        return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-            <span className="dot-gray" />
-            <span>Unknown</span>
-          </span>
-        );
-    }
+  // Modal open helpers
+  const handleOpenCreateModal = () => {
+    setEditingService(null);
+    setModalOpen(true);
+  };
+
+  const handleOpenEditModal = (service) => {
+    setEditingService(service);
+    setModalOpen(true);
+  };
+
+  // Select service to view detail
+  const handleSelectService = (serviceId) => {
+    setSelectedServiceId(serviceId);
+    setActiveTab('SERVICE_DETAIL');
   };
 
   return (
-    <div style={{ minHeight: '100vh', padding: '2rem 1rem' }}>
-      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto space-y-6">
 
-        {/* Global Terminal Card Container */}
-        <div style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: '12px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-          overflow: 'hidden',
-        }}>
-
-          {/* 1. Header (Matching ASCII Top Banner) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '1.25rem 2rem',
-            borderBottom: '1px solid var(--border)',
-            backgroundColor: '#0c101a',
-            flexWrap: 'wrap',
-            gap: '1rem',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Activity size={22} style={{ color: '#06b6d4' }} />
-              <h1 style={{
-                fontSize: '1.15rem',
-                fontWeight: 700,
-                letterSpacing: '0.12em',
-                color: 'var(--text-main)',
-                margin: 0,
-              }} className="mono">
-                UPTIME MONITOR
-              </h1>
+        {/* 1. Global Terminal Card Header (Matching SRE Aesthetic) */}
+        <header className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between p-4 sm:p-6 border-b border-zinc-800 gap-4 bg-zinc-950/70">
+            
+            {/* Branding */}
+            <div className="flex items-center gap-3">
+              <Activity size={22} className="text-cyan-400" />
+              <div>
+                <h1 className="text-base font-bold tracking-widest text-zinc-100 font-mono">
+                  UPTIME MONITOR
+                </h1>
+                <p className="text-[11px] text-zinc-500 font-mono">
+                  Production Health & Reliability Fleet
+                </p>
+              </div>
             </div>
 
-            {/* System Online Badge & Actions */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              {/* Online indicator */}
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '4px 12px',
-                borderRadius: '9999px',
-                backgroundColor: data?.system_status === 'SYSTEM ONLINE' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                border: `1px solid ${data?.system_status === 'SYSTEM ONLINE' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-              }} className="mono">
-                <span className={data?.system_status === 'SYSTEM ONLINE' ? 'dot-green' : 'dot-red'} />
-                <span style={{ color: data?.system_status === 'SYSTEM ONLINE' ? 'var(--green)' : 'var(--red)' }}>
-                  {data?.system_status || 'CONNECTING...'}
-                </span>
+            {/* Status & Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Live Status Pill */}
+              <div
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wider border ${
+                  dashboardData?.system_status === 'SYSTEM ONLINE'
+                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-800/50'
+                    : 'bg-rose-950/60 text-rose-300 border-rose-800/60'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    dashboardData?.system_status === 'SYSTEM ONLINE'
+                      ? 'bg-emerald-400 pulse-green'
+                      : 'bg-rose-500 pulse-red'
+                  }`}
+                />
+                <span>{dashboardData?.system_status || 'CONNECTING...'}</span>
               </div>
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  onClick={() => loadData(false)}
-                  disabled={refreshing}
-                  title="Refresh status"
-                  style={{
-                    backgroundColor: 'var(--bg-subtle)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-muted)',
-                    padding: '6px 10px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '0.75rem',
-                  }}
-                  className="mono"
-                >
-                  <RefreshCw size={13} className={refreshing ? 'spin' : ''} />
-                  <span>Refresh</span>
-                </button>
+              {/* Refresh button */}
+              <button
+                onClick={() => loadData(false)}
+                disabled={refreshing}
+                title="Refresh dashboard data"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-medium rounded bg-zinc-800/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/60 transition-colors"
+              >
+                <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                <span>Refresh</span>
+              </button>
 
-                <button
-                  onClick={handleCheckAll}
-                  disabled={checkingAll}
-                  title="Probe all active endpoints now"
-                  style={{
-                    backgroundColor: 'var(--bg-subtle)',
-                    border: '1px solid var(--border)',
-                    color: '#06b6d4',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                  }}
-                  className="mono"
-                >
-                  <Play size={12} fill="#06b6d4" />
-                  <span>{checkingAll ? 'Checking...' : 'Check All'}</span>
-                </button>
+              {/* Check All button */}
+              <button
+                onClick={handleTriggerCheckAll}
+                disabled={probingAll}
+                title="Trigger concurrent probe on all active endpoints"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-semibold rounded bg-zinc-800 hover:bg-zinc-700 text-cyan-400 border border-zinc-700 transition-colors disabled:opacity-50"
+              >
+                <Play size={12} fill="currentColor" className={probingAll ? 'animate-spin' : ''} />
+                <span>{probingAll ? 'Probing...' : 'Check All'}</span>
+              </button>
 
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  style={{
-                    backgroundColor: 'var(--green)',
-                    border: 'none',
-                    color: '#06261c',
-                    padding: '6px 14px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                  }}
-                  className="mono"
-                >
-                  <Plus size={14} />
-                  <span>+ Service</span>
-                </button>
-              </div>
+              {/* Add Service button */}
+              <button
+                onClick={handleOpenCreateModal}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-semibold rounded bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-colors cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Add Service</span>
+              </button>
             </div>
           </div>
 
-          {/* Error Banner */}
-          {error && (
-            <div style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.15)',
-              borderBottom: '1px solid var(--red)',
-              color: 'var(--red)',
-              padding: '0.75rem 2rem',
-              fontSize: '0.85rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
-              <AlertTriangle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
+          {/* Navigation Tabs Bar */}
+          <div className="flex items-center justify-between px-6 py-2.5 bg-zinc-900 border-b border-zinc-800 text-xs font-mono">
+            <nav className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedServiceId(null);
+                  setActiveTab('OVERVIEW');
+                }}
+                className={`px-3 py-1.5 rounded transition-colors ${
+                  activeTab === 'OVERVIEW'
+                    ? 'bg-zinc-800 text-zinc-100 font-bold border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Overview
+              </button>
 
-          {/* Active Incidents Alert Banner */}
-          {data?.active_incidents && data.active_incidents.length > 0 && (
-            <div style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              borderBottom: '1px solid rgba(239, 68, 68, 0.3)',
-              padding: '1rem 2rem',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--red)', fontWeight: 600, marginBottom: '6px' }}>
-                <ShieldAlert size={18} />
-                <span className="mono" style={{ letterSpacing: '0.05em' }}>
-                  ACTIVE OUTAGE ({data.active_incidents.length} INCIDENT{data.active_incidents.length > 1 ? 'S' : ''})
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {data.active_incidents.map((inc) => (
-                  <div key={inc.id} style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>Incident #{inc.id}</span>: Service #{inc.service_id} is down —{' '}
-                    <span style={{ color: 'var(--red)' }}>{inc.last_error_message || 'Unreachable'}</span>{' '}
-                    (Consecutive failures: {inc.failure_count})
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+              <button
+                onClick={() => {
+                  setSelectedServiceId(null);
+                  setActiveTab('INCIDENTS');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
+                  activeTab === 'INCIDENTS'
+                    ? 'bg-zinc-800 text-zinc-100 font-bold border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <ShieldAlert size={13} className={dashboardData?.active_incidents?.length > 0 ? 'text-rose-400' : ''} />
+                <span>Incidents</span>
+                {dashboardData?.active_incidents?.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-zinc-950 font-bold text-[10px]">
+                    {dashboardData.active_incidents.length}
+                  </span>
+                )}
+              </button>
+            </nav>
 
-          {/* 2. Top Metrics Section (Matching ASCII Metrics Grid) */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            padding: '2rem',
-            borderBottom: '1px solid var(--border)',
-            gap: '2rem',
-            backgroundColor: '#0e121d',
-          }}>
-            {/* Uptime */}
-            <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em', lineHeight: 1.1 }} className="mono">
-                {data ? `${data.overall_uptime_percentage.toFixed(2)}%` : '—'}
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Uptime
-              </div>
-            </div>
-
-            {/* Avg Latency */}
-            <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--cyan)', letterSpacing: '-0.02em', lineHeight: 1.1 }} className="mono">
-                {data?.overall_avg_response_time_ms !== null && data?.overall_avg_response_time_ms !== undefined
-                  ? `${Math.round(data.overall_avg_response_time_ms)}ms`
-                  : '—'}
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Avg latency
-              </div>
-            </div>
-
-            {/* Services Count */}
-            <div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em', lineHeight: 1.1 }} className="mono">
-                {data ? data.total_services : '—'}
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Services
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', fontSize: '0.75rem' }} className="mono">
-                <span style={{ color: 'var(--green)' }}>● {data?.healthy_services || 0} Healthy</span>
-                {data?.degraded_services > 0 && <span style={{ color: 'var(--yellow)' }}>● {data.degraded_services} Degraded</span>}
-                {data?.down_services > 0 && <span style={{ color: 'var(--red)' }}>● {data.down_services} Down</span>}
-              </div>
+            <div className="text-zinc-500 text-[11px] flex items-center gap-4">
+              <span>Auto-refresh: {autoRefresh ? '5s' : 'Off'}</span>
+              <span>Sync: {lastSync.toLocaleTimeString()}</span>
             </div>
           </div>
+        </header>
 
-          {/* 3. Services Section (Matching ASCII Services List) */}
-          <div style={{ padding: '2rem', borderBottom: '1px solid var(--border)' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '1.25rem',
-            }}>
-              <h2 style={{
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                color: 'var(--text-muted)',
-                letterSpacing: '0.12em',
-                margin: 0,
-              }} className="mono">
-                SERVICES
-              </h2>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }} className="mono">
-                Auto-refresh: {autoRefresh ? 'ON (5s)' : 'PAUSED'}
-              </span>
-            </div>
+        {/* Error Alert */}
+        {error && (
+          <div className="p-4 bg-rose-950/40 border border-rose-800 rounded-xl text-rose-300 text-xs font-mono flex items-center gap-2">
+            <AlertTriangle size={16} className="text-rose-400 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-            {/* Services List Table */}
-            {data?.services && data.services.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {data.services.map((svc) => (
-                  <div
-                    key={svc.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(110px, 1fr) 90px',
-                      alignItems: 'center',
-                      padding: '0.85rem 1.25rem',
-                      backgroundColor: 'var(--bg-subtle)',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      transition: 'background-color 0.15s ease, border-color 0.15s ease',
-                      gap: '1rem',
-                    }}
-                  >
-                    {/* Name & URL */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                        {svc.current_state === 'HEALTHY' && <span className="dot-green" />}
-                        {svc.current_state === 'FAILING' && <span className="dot-yellow" />}
-                        {svc.current_state === 'DOWN' && <span className="dot-red" />}
-                        {!svc.is_active && <span className="dot-gray" />}
-
-                        <span style={{ fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {svc.name}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Uptime % */}
-                    <div style={{ textAlign: 'right', color: 'var(--text-main)', fontWeight: 600 }} className="mono">
-                      {svc.uptime_percentage.toFixed(2)}%
-                    </div>
-
-                    {/* Avg Latency */}
-                    <div style={{ textAlign: 'right', color: 'var(--text-muted)' }} className="mono">
-                      {svc.avg_response_time_ms !== null && svc.avg_response_time_ms !== undefined
-                        ? `${Math.round(svc.avg_response_time_ms)}ms`
-                        : '—'}
-                    </div>
-
-                    {/* State Badge */}
-                    <div style={{ textAlign: 'center' }}>
-                      {getStatusBadge(svc.current_state, svc.is_active)}
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                      <button
-                        onClick={(e) => handleCheckService(svc.id, e)}
-                        disabled={checkingServiceId === svc.id}
-                        title="Run health check now"
-                        style={{
-                          backgroundColor: 'transparent',
-                          border: '1px solid var(--border)',
-                          color: '#06b6d4',
-                          padding: '4px 6px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Play size={12} fill="#06b6d4" className={checkingServiceId === svc.id ? 'spin' : ''} />
-                      </button>
-
-                      <button
-                        onClick={(e) => handleDeleteService(svc.id, svc.name, e)}
-                        title="Delete service"
-                        style={{
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-dim)',
-                          padding: '4px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{
-                padding: '2.5rem',
-                textAlign: 'center',
-                color: 'var(--text-muted)',
-                backgroundColor: 'var(--bg-subtle)',
-                borderRadius: '8px',
-                border: '1px dashed var(--border)',
-              }}>
-                <Server size={32} style={{ color: 'var(--text-dim)', marginBottom: '8px' }} />
-                <div style={{ fontWeight: 600 }}>No services registered yet</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-                  Click "+ Service" above to start monitoring an API or website.
-                </div>
-              </div>
+        {/* 2. Main View Content */}
+        {loading && !dashboardData ? (
+          <div className="py-24 flex flex-col items-center justify-center text-zinc-500 font-mono text-xs">
+            <Activity className="animate-spin text-cyan-400 mb-3" size={24} />
+            Initializing monitoring dashboard...
+          </div>
+        ) : (
+          <main>
+            {activeTab === 'OVERVIEW' && (
+              <OverviewView
+                dashboardData={dashboardData}
+                onSelectService={handleSelectService}
+                onEditService={handleOpenEditModal}
+                onDeleteService={handleDeleteService}
+                onTriggerCheck={handleTriggerCheck}
+                onToggleActive={handleToggleActive}
+                onOpenCreateModal={handleOpenCreateModal}
+                probingId={probingId}
+              />
             )}
-          </div>
 
-          {/* 4. Response Time Graph (Matching ASCII Latency Graph) */}
-          <div style={{ padding: '2rem' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '1rem',
-            }}>
-              <h2 style={{
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                color: 'var(--text-muted)',
-                letterSpacing: '0.12em',
-                margin: 0,
-              }} className="mono">
-                RESPONSE TIME
-              </h2>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }} className="mono">
-                Last 40 probes
-              </span>
-            </div>
+            {activeTab === 'INCIDENTS' && (
+              <IncidentsView
+                services={dashboardData?.services || []}
+                onSelectService={handleSelectService}
+              />
+            )}
 
-            {/* SVG Interactive Chart */}
-            <ResponseTimeChart points={data?.recent_response_times || []} />
-          </div>
+            {activeTab === 'SERVICE_DETAIL' && selectedServiceId && (
+              <ServiceDetailView
+                serviceId={selectedServiceId}
+                onBack={() => setActiveTab('OVERVIEW')}
+                onEdit={handleOpenEditModal}
+                onDeleted={() => {
+                  setSelectedServiceId(null);
+                  setActiveTab('OVERVIEW');
+                  loadData(true);
+                }}
+              />
+            )}
+          </main>
+        )}
 
-        </div>
-
-        {/* Footer info */}
-        <div style={{
-          marginTop: '1.5rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          color: 'var(--text-dim)',
-          fontSize: '0.75rem',
-          padding: '0 0.5rem',
-        }} className="mono">
-          <div>UTMS v0.1.0 • Engine: Asyncio + PostgreSQL</div>
-          <div>Last sync: {lastUpdated.toLocaleTimeString()}</div>
-        </div>
+        {/* Footer */}
+        <footer className="pt-6 pb-12 text-center text-xs text-zinc-600 font-mono">
+          Uptime Monitoring System (UTMS) • Python asyncio prober • FastAPI • PostgreSQL
+        </footer>
 
       </div>
 
-      {/* Add Service Modal */}
-      <AddServiceModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onServiceAdded={() => loadData(false)}
+      {/* Service Create / Edit Modal */}
+      <ServiceModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        service={editingService}
+        onSaved={() => loadData(false)}
       />
     </div>
   );
