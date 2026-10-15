@@ -1,11 +1,13 @@
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.checker.runner import check_all_enabled_services, check_service
-from app.checker.schemas import CheckResult
+from app.checker.schemas import CheckResult, ServiceSummary
 from app.schemas.service import ServiceCreate, ServiceResponse, ServiceUpdate
+from app.services.checks import get_service_checks, get_service_summary
 from app.services.service_manager import (
     create_service,
     delete_service,
@@ -103,6 +105,73 @@ async def check_single_service_endpoint(
             detail=f"Service with id {id} not found",
         )
     return await check_service(service=service, db=db, persist=persist)
+
+
+@router.get(
+    "/{id}/checks",
+    response_model=List[CheckResult],
+    summary="Get historical check results for a service",
+    description="Retrieves historical health checks with filtering for time range, status, and pagination.",
+)
+async def get_service_check_history(
+    id: int,
+    start_time: Optional[datetime] = Query(None, description="Filter checks from this timestamp"),
+    end_time: Optional[datetime] = Query(None, description="Filter checks up to this timestamp"),
+    success: Optional[bool] = Query(None, description="Filter by check outcome (true=success, false=failed)"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
+    db: AsyncSession = Depends(get_db),
+) -> List[CheckResult]:
+    service = await get_service_by_id(db=db, service_id=id)
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service with id {id} not found",
+        )
+    records = await get_service_checks(
+        db=db,
+        service_id=id,
+        start_time=start_time,
+        end_time=end_time,
+        success=success,
+        skip=skip,
+        limit=limit,
+    )
+    return [CheckResult.model_validate(r) for r in records]
+
+
+@router.get(
+    "/{id}/summary",
+    response_model=ServiceSummary,
+    summary="Get uptime and latency summary for a service",
+    description="Returns aggregated metrics including uptime percentage, average response latency, and check counts.",
+)
+async def get_service_health_summary(
+    id: int,
+    start_time: Optional[datetime] = Query(None, description="Start timestamp of evaluation window"),
+    end_time: Optional[datetime] = Query(None, description="End timestamp of evaluation window"),
+    hours: Optional[int] = Query(None, ge=1, le=8760, description="Shortcut to evaluate last N hours"),
+    db: AsyncSession = Depends(get_db),
+) -> ServiceSummary:
+    service = await get_service_by_id(db=db, service_id=id)
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service with id {id} not found",
+        )
+
+    eval_start = start_time
+    eval_end = end_time
+
+    if hours is not None and eval_start is None:
+        eval_start = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    return await get_service_summary(
+        db=db,
+        service=service,
+        start_time=eval_start,
+        end_time=eval_end,
+    )
 
 
 @router.patch(

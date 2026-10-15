@@ -18,7 +18,7 @@ class CheckResultModel(Base):
         nullable=False,
         index=True,
     )
-    timestamp: Mapped[datetime] = mapped_column(
+    checked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
@@ -33,5 +33,13 @@ class CheckResultModel(Base):
     # Relationship to parent Service
     service = relationship("Service", backref="check_results")
 
+    @property
+    def timestamp(self) -> datetime:
+        """Backwards compatibility alias for checked_at."""
+        return self.checked_at
+
     def __repr__(self) -> str:
-        return f"<CheckResultModel id={self.id} service_id={self.service_id} success={self.success}>"
+        return (
+            f"<CheckResultModel id={self.id} service_id={self.service_id} "
+            f"checked_at={self.checked_at} success={self.success}>"
+        )

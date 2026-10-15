@@ -19,12 +19,14 @@ async def check_service(
     service: Service,
     client: Optional[httpx.AsyncClient] = None,
     db: Optional[AsyncSession] = None,
-    persist: bool = False,
+    persist: bool = True,
 ) -> CheckResult:
     """Perform an isolated, asynchronous HTTP health check on a single service.
 
-    Guarantees that any network error, timeout, or unexpected exception is caught
-    and recorded into a structured CheckResult without bubbling up or crashing the caller.
+    Guarantees that:
+    1. Network errors, timeouts, and unexpected exceptions are captured into a structured CheckResult.
+    2. Completed checks are safely persisted to the database if a session is provided.
+    3. Storage/database failures never crash or disrupt the monitoring process.
     """
     should_close_client = False
     if client is None:
@@ -32,7 +34,7 @@ async def check_service(
         should_close_client = True
 
     start_time = time.perf_counter()
-    timestamp = datetime.now(timezone.utc)
+    checked_at = datetime.now(timezone.utc)
     method = (service.http_method or "GET").upper()
     timeout = httpx.Timeout(service.timeout_seconds)
 
@@ -46,7 +48,7 @@ async def check_service(
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         status_code = response.status_code
 
-        # Evaluate success condition
+        # Evaluate success condition against expected status code
         if service.expected_status_code:
             is_success = (status_code == service.expected_status_code)
         else:
@@ -62,7 +64,7 @@ async def check_service(
 
         result = CheckResult(
             service_id=service.id,
-            timestamp=timestamp,
+            checked_at=checked_at,
             success=is_success,
             status_code=status_code,
             response_time_ms=elapsed_ms,
@@ -75,7 +77,7 @@ async def check_service(
         logger.debug("Timeout checking service %s (%s): %s", service.id, service.url, exc)
         result = CheckResult(
             service_id=service.id,
-            timestamp=timestamp,
+            checked_at=checked_at,
             success=False,
             status_code=None,
             response_time_ms=elapsed_ms,
@@ -88,7 +90,7 @@ async def check_service(
         logger.debug("Network error checking service %s (%s): %s", service.id, service.url, exc)
         result = CheckResult(
             service_id=service.id,
-            timestamp=timestamp,
+            checked_at=checked_at,
             success=False,
             status_code=None,
             response_time_ms=elapsed_ms,
@@ -107,7 +109,7 @@ async def check_service(
         )
         result = CheckResult(
             service_id=service.id,
-            timestamp=timestamp,
+            checked_at=checked_at,
             success=False,
             status_code=None,
             response_time_ms=elapsed_ms,
@@ -119,19 +121,32 @@ async def check_service(
         if should_close_client:
             await client.aclose()
 
-    # Optionally persist result to database
+    # Safely persist check result to database if session is provided
     if persist and db is not None:
-        db_record = CheckResultModel(
-            service_id=result.service_id,
-            timestamp=result.timestamp,
-            success=result.success,
-            status_code=result.status_code,
-            response_time_ms=result.response_time_ms,
-            error_type=result.error_type,
-            error_message=result.error_message,
-        )
-        db.add(db_record)
-        await db.commit()
+        try:
+            db_record = CheckResultModel(
+                service_id=result.service_id,
+                checked_at=result.checked_at,
+                success=result.success,
+                status_code=result.status_code,
+                response_time_ms=result.response_time_ms,
+                error_type=result.error_type,
+                error_message=result.error_message,
+            )
+            db.add(db_record)
+            await db.commit()
+            result.id = db_record.id
+        except Exception as db_exc:
+            logger.error(
+                "Database error: Failed to persist check result for service %s: %s",
+                result.service_id,
+                db_exc,
+                exc_info=True,
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     return result
 
@@ -139,13 +154,15 @@ async def check_service(
 async def check_all_enabled_services(
     db: AsyncSession,
     client: Optional[httpx.AsyncClient] = None,
-    persist: bool = False,
+    persist: bool = True,
     max_concurrency: int = 10,
 ) -> List[CheckResult]:
     """Select all enabled services from the database and check them concurrently.
 
-    Uses an asyncio.Semaphore to bound concurrency and asyncio.gather to ensure
-    that slow or failing services never block or interrupt concurrent executions.
+    Guarantees that:
+    1. Checks execute concurrently bounded by a semaphore.
+    2. Slow or failing checks never interrupt other probes.
+    3. Every completed check is safely persisted without aborting on individual database errors.
     """
     statement = select(Service).where(Service.is_active.is_(True))
     exec_result = await db.execute(statement)
@@ -167,7 +184,7 @@ async def check_all_enabled_services(
             return await check_service(
                 service=srv,
                 client=active_client,
-                db=None,  # We do bulk persistence below if requested
+                db=None,  # Handled safely below
                 persist=False,
             )
 
@@ -182,7 +199,7 @@ async def check_all_enabled_services(
                 results.append(
                     CheckResult(
                         service_id=srv.id,
-                        timestamp=datetime.now(timezone.utc),
+                        checked_at=datetime.now(timezone.utc),
                         success=False,
                         status_code=None,
                         response_time_ms=None,
@@ -193,21 +210,33 @@ async def check_all_enabled_services(
             else:
                 results.append(res)
 
-        # Bulk persistence if requested
+        # Safely persist completed checks
         if persist:
             for r in results:
-                db.add(
-                    CheckResultModel(
+                try:
+                    db_record = CheckResultModel(
                         service_id=r.service_id,
-                        timestamp=r.timestamp,
+                        checked_at=r.checked_at,
                         success=r.success,
                         status_code=r.status_code,
                         response_time_ms=r.response_time_ms,
                         error_type=r.error_type,
                         error_message=r.error_message,
                     )
-                )
-            await db.commit()
+                    db.add(db_record)
+                    await db.commit()
+                    r.id = db_record.id
+                except Exception as db_exc:
+                    logger.error(
+                        "Database error: Failed to persist check result for service %s: %s",
+                        r.service_id,
+                        db_exc,
+                        exc_info=True,
+                    )
+                    try:
+                        await db.rollback()
+                    except Exception:
+                        pass
 
         return results
 
