@@ -70,7 +70,13 @@ class AlertService:
 
         async def _safe_send(provider: BaseNotificationProvider) -> bool:
             try:
-                return await provider.send(event)
+                success = await provider.send(event)
+                try:
+                    from app.core.metrics import record_notification_outcome
+                    record_notification_outcome(provider.name, event.event_type.value, bool(success))
+                except Exception:
+                    pass
+                return bool(success)
             except Exception as exc:
                 logger.error(
                     "Unexpected exception from provider '%s' during alert dispatch: %s",
@@ -78,6 +84,11 @@ class AlertService:
                     exc,
                     exc_info=True,
                 )
+                try:
+                    from app.core.metrics import record_notification_outcome
+                    record_notification_outcome(provider.name, event.event_type.value, False)
+                except Exception:
+                    pass
                 return False
 
         tasks = [_safe_send(provider) for provider in active_providers]

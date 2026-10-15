@@ -121,6 +121,13 @@ async def process_check_result(
                 result.error_message,
             )
 
+            # Record Prometheus incident metrics
+            try:
+                from app.core.metrics import record_incident_opened
+                record_incident_opened(service.name)
+            except Exception as m_exc:
+                logger.debug("Metrics record_incident_opened failed: %s", m_exc)
+
             # Dispatch notification for incident creation (failure alert)
             try:
                 dispatcher = alert_service or get_alert_service()
@@ -192,6 +199,13 @@ async def process_check_result(
                 service.name,
                 active_incident.failure_count,
             )
+
+            # Record Prometheus incident metrics
+            try:
+                from app.core.metrics import record_incident_resolved
+                record_incident_resolved(service.name)
+            except Exception as m_exc:
+                logger.debug("Metrics record_incident_resolved failed: %s", m_exc)
 
             # Dispatch notification for incident recovery
             try:

@@ -121,6 +121,19 @@ async def check_service(
         if should_close_client:
             await client.aclose()
 
+    # Record Prometheus monitoring metrics
+    try:
+        from app.core.metrics import record_check_result
+        record_check_result(
+            service_name=service.name,
+            method=method,
+            success=result.success,
+            response_time_ms=result.response_time_ms,
+            error_type=result.error_type,
+        )
+    except Exception as m_exc:
+        logger.debug("Metrics recording failed: %s", m_exc)
+
     # Safely persist check result to database if session is provided
     if persist and db is not None:
         try:

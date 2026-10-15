@@ -28,7 +28,7 @@ UTMS/
 ├── README.md                # Project setup and documentation
 ├── Dockerfile               # Production FastAPI backend container definition
 ├── docker-entrypoint.sh     # Backend entrypoint (db readiness check + auto-migrations)
-├── docker-compose.yml       # Production-ready compose configuration (3 services)
+├── docker-compose.yml       # Production-ready compose configuration (5 services)
 ├── requirements.txt         # Core production dependencies
 ├── requirements-dev.txt     # Development and testing dependencies
 ├── pytest.ini               # Pytest configuration
@@ -49,7 +49,8 @@ UTMS/
 │   │       ├── router.py    # API v1 aggregated router
 │   │       └── endpoints/   # Health, services, checks, incidents, dashboard endpoints
 │   ├── core/
-│   │   └── config.py        # Pydantic BaseSettings and URL normalization
+│   │   ├── config.py        # Pydantic BaseSettings and URL normalization
+│   │   └── metrics.py       # Prometheus metrics definitions and instrumentation helpers
 │   ├── db/
 │   │   ├── base.py          # SQLAlchemy DeclarativeBase
 │   │   └── session.py       # Async engine and session factory
@@ -61,7 +62,13 @@ UTMS/
 │   ├── nginx.conf           # Reverse proxy, security headers, SPA fallback
 │   ├── src/                 # React components and dashboard views
 │   └── package.json         # Frontend dependencies and scripts
-└── tests/                   # Automated test suite (66 async tests)
+├── prometheus/              # Prometheus configuration
+│   └── prometheus.yml       # Scrape configuration for UTMS backend
+├── grafana/                 # Grafana automated provisioning
+│   └── provisioning/
+│       ├── datasources/     # Auto-provisioned Prometheus datasource
+│       └── dashboards/      # Auto-provisioned SRE dashboards & JSON models
+└── tests/                   # Automated test suite (69 async tests)
 ```
 
 ---
@@ -446,3 +453,77 @@ docker compose config
 docker build -t utms-backend:ci .
 docker build -t utms-frontend:ci ./frontend
 ```
+
+---
+
+## Observability: Prometheus & Grafana (Phase 11)
+
+UTMS provides enterprise-grade observability and telemetry using **Prometheus** for metrics collection and **Grafana** for real-time visualization and alerting.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Observability Architecture                      │
+│                                                                        │
+│   ┌───────────────┐     Scrapes /metrics      ┌────────────────────┐   │
+│   │ utms_backend  │◀──────────────────────────│  utms_prometheus   │   │
+│   │ (:8000)       │       (every 5s)          │  (:9090)           │   │
+│   └───────────────┘                           └─────────┬──────────┘   │
+│                                                         │ PromQL       │
+│                                                         ▼ Queries      │
+│                                               ┌────────────────────┐   │
+│                                               │    utms_grafana    │   │
+│                                               │    (:3001)         │   │
+│                                               └────────────────────┘   │
+│                                                 Auto-provisioned       │
+│                                                 Dashboards             │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Metrics Exposed (`GET /metrics`):
+The FastAPI application exposes Prometheus-formatted metrics at `/metrics`:
+
+| Metric Name | Type | Labels | Description |
+| :--- | :--- | :--- | :--- |
+| `utms_monitored_services_total` | Gauge | `status` | Active count of services (`enabled`, `disabled`) |
+| `utms_checks_total` | Counter | `service_name`, `method`, `status` | Total monitoring checks performed (`success`, `failed`) |
+| `utms_checks_success_total` | Counter | `service_name` | Total number of successful health checks |
+| `utms_checks_failed_total` | Counter | `service_name`, `error_type` | Total failed checks grouped by error category |
+| `utms_check_duration_seconds` | Histogram | `service_name` | Duration of health checks in seconds (buckets 10ms - 10s) |
+| `utms_active_incidents` | Gauge | `service_name` | Active outage state per service (1=active, 0=none) |
+| `utms_active_incidents_total` | Gauge | None | Global count of unresolved active incidents |
+| `utms_incidents_created_total` | Counter | `service_name` | Total incidents opened due to consecutive failures |
+| `utms_incidents_recovered_total` | Counter | `service_name` | Total incidents automatically recovered |
+| `utms_notification_failures_total` | Counter | `provider`, `event_type` | Total notification delivery failures |
+| `utms_notifications_sent_total` | Counter | `provider`, `event_type` | Total successful notification deliveries |
+| `utms_scheduler_running` | Gauge | None | Monitoring scheduler daemon state (1=running, 0=stopped) |
+| `utms_scheduler_ticks_total` | Counter | None | Total evaluation tick cycles executed |
+| `utms_scheduler_last_tick_timestamp_seconds` | Gauge | None | Unix timestamp of most recent scheduler tick |
+| `utms_scheduler_in_flight_checks` | Gauge | None | Count of health check tasks executing concurrently |
+| `utms_api_requests_total` | Counter | `method`, `endpoint`, `status_code` | HTTP API request volume by normalized endpoint |
+| `utms_api_request_duration_seconds` | Histogram | `method`, `endpoint` | API response latency in seconds |
+
+---
+
+### Accessing Prometheus & Grafana:
+
+1. **Prometheus Web UI**:
+   - URL: [http://localhost:9090](http://localhost:9090)
+   - Targets Status: [http://localhost:9090/targets](http://localhost:9090/targets) (verifies `backend:8000` is UP and scraping)
+   - Graph & PromQL Console: [http://localhost:9090/graph](http://localhost:9090/graph)
+
+2. **Grafana Dashboards**:
+   - URL: [http://localhost:3001](http://localhost:3001)
+   - Default Credentials:
+     - **Username**: `admin`
+     - **Password**: `admin`
+   - Pre-provisioned Dashboard: **UTMS — Monitoring & System Observability** (Folder: `UTMS`)
+   - Pre-configured Datasource: **Prometheus** (`http://prometheus:9090`)
+
+### Grafana Dashboard Panels:
+The pre-provisioned dashboard automatically visualizes:
+1. **Service Availability**: Live gauges of enabled services, total checks executed, and global success percentage.
+2. **Check Success / Failure Rates**: Real-time operations/sec graph with failure breakdown by error type (`HTTP_STATUS`, `TIMEOUT`, `CONNECTION_ERROR`).
+3. **Probe Latency**: Percentiles ($p_{50}$, $p_{95}$, $p_{99}$) and per-service average check response times.
+4. **Active Incidents**: Open incidents counter, outage timeline, and notification delivery vs failure rates.
+5. **Monitoring Worker Health**: Scheduler tick rate, in-flight concurrent probe count, and worker daemon state.
+6. **API Health**: API request throughput by normalized endpoint and status code distribution.

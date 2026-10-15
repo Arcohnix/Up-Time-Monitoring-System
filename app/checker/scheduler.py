@@ -66,6 +66,11 @@ class MonitoringScheduler:
 
         self._running = True
         self._loop_task = asyncio.create_task(self._run_loop(), name="monitoring-scheduler-loop")
+        try:
+            from app.core.metrics import set_scheduler_running
+            set_scheduler_running(True)
+        except Exception:
+            pass
         logger.info("Scheduler startup complete")
 
     async def stop(self, timeout: float = 5.0) -> None:
@@ -75,6 +80,11 @@ class MonitoringScheduler:
 
         logger.info("Scheduler shutdown initiated")
         self._running = False
+        try:
+            from app.core.metrics import set_scheduler_running
+            set_scheduler_running(False)
+        except Exception:
+            pass
 
         # Cancel the tick loop
         if self._loop_task and not self._loop_task.done():
@@ -122,9 +132,18 @@ class MonitoringScheduler:
         """Execute a single evaluation pass: query enabled services and dispatch due checks."""
         try:
             async with self.session_factory() as db:
-                stmt = select(Service).where(Service.is_active.is_(True))
+                stmt = select(Service)
                 result = await db.execute(stmt)
-                enabled_services = list(result.scalars().all())
+                all_services = list(result.scalars().all())
+                enabled_services = [s for s in all_services if s.is_active]
+                disabled_services = [s for s in all_services if not s.is_active]
+
+                try:
+                    from app.core.metrics import record_scheduler_tick, update_service_counts
+                    update_service_counts(enabled=len(enabled_services), disabled=len(disabled_services))
+                    record_scheduler_tick(in_flight_count=len(self._in_flight))
+                except Exception:
+                    pass
         except Exception as db_exc:
             logger.error("Unexpected exception querying enabled services in scheduler tick: %s", db_exc, exc_info=True)
             return

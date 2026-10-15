@@ -1,14 +1,21 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Match
 
 from app.api.deps import get_db
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.metrics import record_api_request
 from app.db.session import engine
 from app.schemas.health import HealthResponse
 from app.services.health import check_database_connectivity
@@ -19,6 +26,34 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("utms")
+
+
+class PrometheusMiddleware(BaseHTTPMiddleware):
+    """ASGI middleware to capture request count and latency histograms."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path == "/metrics":
+            return await call_next(request)
+
+        start_time = time.perf_counter()
+        response = await call_next(request)
+        duration = time.perf_counter() - start_time
+
+        # Match route template to avoid unbounded cardinality
+        endpoint = "unmatched"
+        for route in request.app.routes:
+            match, _ = route.matches(request.scope)
+            if match == Match.FULL:
+                endpoint = getattr(route, "path", request.url.path)
+                break
+
+        record_api_request(
+            method=request.method,
+            endpoint=endpoint,
+            status_code=response.status_code,
+            duration_seconds=duration,
+        )
+        return response
 
 
 @asynccontextmanager
@@ -53,6 +88,9 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Observability: Prometheus Request Instrumentation Middleware
+    application.add_middleware(PrometheusMiddleware)
+
     # Cross-Origin Resource Sharing (CORS)
     application.add_middleware(
         CORSMiddleware,
@@ -61,6 +99,16 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Prometheus scrape endpoint: GET /metrics
+    @application.get(
+        "/metrics",
+        tags=["Observability"],
+        summary="Prometheus Metrics Scrape Endpoint",
+        description="Exposes application and monitoring metrics in Prometheus format.",
+    )
+    def metrics() -> Response:
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     # Direct root health endpoint for top-level liveness/readiness probes: GET /health
     @application.get(
