@@ -132,6 +132,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | `/health` | `GET` | Root health check verifying API liveness and DB connectivity |
 | `/api/v1/health` | `GET` | API v1 health check endpoint |
 | `/api/v1/health/db` | `GET` | Explicit database connection check (`SELECT 1`) |
+| `/api/services` | `POST` | Register a new monitored service |
+| `/api/services` | `GET` | List all monitored services (with query filtering) |
+| `/api/services/{id}` | `GET` | Retrieve single service configuration |
+| `/api/services/{id}` | `PATCH` | Partially update a service |
+| `/api/services/{id}` | `DELETE` | Remove a monitored service |
+| `/api/services/{id}/check` | `POST` | Manually trigger health check on a specific service |
+| `/api/services/check-all` | `POST` | Manually trigger concurrent health checks on all active services |
 | `/docs` | `GET` | Interactive OpenAPI documentation (Swagger UI) |
 | `/redoc` | `GET` | ReDoc API documentation |
 
