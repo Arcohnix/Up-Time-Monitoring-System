@@ -25,9 +25,18 @@ logger = logging.getLogger("utms")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context manager for startup and shutdown routines."""
     logger.info("Starting %s v%s in %s mode", settings.PROJECT_NAME, settings.VERSION, settings.ENVIRONMENT)
+
+    scheduler = None
+    if settings.ENABLE_SCHEDULER:
+        from app.checker.scheduler import get_scheduler
+        scheduler = get_scheduler()
+        await scheduler.start()
+
     try:
         yield
     finally:
+        if scheduler is not None:
+            await scheduler.stop()
         logger.info("Shutting down %s, releasing database connections...", settings.PROJECT_NAME)
         await engine.dispose()
         logger.info("Cleanup complete.")

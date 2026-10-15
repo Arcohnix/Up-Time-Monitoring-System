@@ -4,8 +4,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.deps import get_db
+from app.core.config import settings
 from app.db.base import Base
 from app.main import create_application
+
+# Disable automatic background scheduler loop during test runs
+settings.ENABLE_SCHEDULER = False
 
 # Use in-memory SQLite for fast, isolated, deterministic unit/integration tests
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -26,13 +30,17 @@ async def test_engine():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    session_factory = async_sessionmaker(
+def test_session_factory(test_engine):
+    return async_sessionmaker(
         bind=test_engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    async with session_factory() as session:
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_session(test_session_factory) -> AsyncGenerator[AsyncSession, None]:
+    async with test_session_factory() as session:
         yield session
 
 

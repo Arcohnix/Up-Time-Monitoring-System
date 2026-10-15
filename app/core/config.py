@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT: int = 30
 
+    # Monitoring Scheduler settings
+    ENABLE_SCHEDULER: bool = True
+    SCHEDULER_TICK_INTERVAL_SECONDS: float = 1.0
+    SCHEDULER_MAX_CONCURRENCY: int = 50
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def async_database_url(self) -> str:
