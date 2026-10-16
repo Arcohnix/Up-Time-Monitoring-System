@@ -51,76 +51,32 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.75)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '1rem',
-    }}>
-      <div style={{
-        backgroundColor: '#101522',
-        border: '1px solid var(--border)',
-        borderRadius: '12px',
-        width: '100%',
-        maxWidth: '520px',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-        overflow: 'hidden',
-      }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-xs">
+      <div className="w-full max-w-lg bg-white border border-[#E5E7EB] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '1.25rem 1.5rem',
-          borderBottom: '1px solid var(--border)',
-        }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)', letterSpacing: '0.05em' }} className="mono">
-            + REGISTER SERVICE
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-[#F7F8FA]">
+          <h2 className="text-sm font-semibold tracking-tight text-[#18181B] uppercase">
+            + Register Service
           </h2>
           <button
             onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-            }}
+            className="p-1 rounded-md text-[#71717A] hover:text-[#18181B] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '0.75rem',
-              borderRadius: '6px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid var(--red)',
-              color: 'var(--red)',
-              fontSize: '0.85rem',
-            }}>
-              <AlertCircle size={16} />
+            <div className="flex items-center gap-2 p-3 text-xs rounded-lg bg-[#FBEDEE] border border-[#C75C62]/30 text-[#A63F46]">
+              <AlertCircle size={15} className="shrink-0 text-[#C75C62]" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
               Service Name
             </label>
             <input
@@ -129,21 +85,12 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
               placeholder="e.g. Payment Gateway"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{
-                width: '100%',
-                backgroundColor: '#171f33',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                padding: '0.6rem 0.8rem',
-                color: 'var(--text-main)',
-                fontSize: '0.9rem',
-                outline: 'none',
-              }}
+              className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors"
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
               Endpoint URL
             </label>
             <input
@@ -152,37 +99,19 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
               placeholder="https://api.example.com/health"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              style={{
-                width: '100%',
-                backgroundColor: '#171f33',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                padding: '0.6rem 0.8rem',
-                color: 'var(--text-main)',
-                fontSize: '0.9rem',
-                outline: 'none',
-              }}
+              className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] font-mono transition-colors"
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 HTTP Method
               </label>
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#171f33',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '0.6rem 0.8rem',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors"
               >
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
@@ -191,30 +120,21 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Expected Status
               </label>
               <input
                 type="number"
                 value={expectedCode}
                 onChange={(e) => setExpectedCode(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#171f33',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '0.6rem 0.8rem',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Interval (s)
               </label>
               <input
@@ -223,21 +143,12 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
                 max="86400"
                 value={interval}
                 onChange={(e) => setIntervalVal(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#171f33',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '0.6rem 0.8rem',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Timeout (s)
               </label>
               <input
@@ -246,21 +157,12 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
                 max="60"
                 value={timeout}
                 onChange={(e) => setTimeoutVal(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#171f33',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '0.6rem 0.8rem',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Threshold
               </label>
               <input
@@ -269,56 +171,26 @@ export default function AddServiceModal({ isOpen, onClose, onServiceAdded }) {
                 max="20"
                 value={failureThreshold}
                 onChange={(e) => setFailureThreshold(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#171f33',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '0.6rem 0.8rem',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                }}
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
           </div>
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[#E5E7EB]">
             <button
               type="button"
               onClick={onClose}
-              style={{
-                backgroundColor: 'transparent',
-                border: '1px solid var(--border)',
-                color: 'var(--text-muted)',
-                padding: '0.5rem 1rem',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-              }}
+              className="px-4 py-2 text-xs font-medium text-[#71717A] hover:text-[#18181B] bg-transparent hover:bg-[#F3F4F6] rounded-lg transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                backgroundColor: '#10b981',
-                border: 'none',
-                color: '#06261c',
-                fontWeight: 600,
-                padding: '0.5rem 1.25rem',
-                borderRadius: '6px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.85rem',
-              }}
+              className="px-4 py-2 text-xs font-medium rounded-lg bg-[#5865D8] hover:bg-[#4754C4] text-white shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
-              <Plus size={16} />
+              <Plus size={14} />
               {loading ? 'Registering...' : 'Add Service'}
             </button>
           </div>

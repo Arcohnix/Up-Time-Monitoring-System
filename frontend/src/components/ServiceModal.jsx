@@ -78,20 +78,20 @@ export default function ServiceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
-      <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-xs">
+      <div className="w-full max-w-lg bg-white border border-[#E5E7EB] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-[#F7F8FA]">
           <div className="flex items-center gap-2">
-            {isEditing ? <Edit2 size={16} className="text-zinc-400" /> : <Plus size={16} className="text-emerald-400" />}
-            <h2 className="text-sm font-semibold tracking-wide text-zinc-100 uppercase font-mono">
+            {isEditing ? <Edit2 size={16} className="text-[#5865D8]" /> : <Plus size={16} className="text-[#5865D8]" />}
+            <h2 className="text-sm font-semibold tracking-tight text-[#18181B]">
               {isEditing ? `Edit Service #${service.id}` : 'Register Monitored Service'}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="p-1 rounded-md text-[#71717A] hover:text-[#18181B] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -100,14 +100,14 @@ export default function ServiceModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="flex items-start gap-2 p-3 text-xs rounded bg-rose-950/40 border border-rose-800/60 text-rose-300">
-              <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-400" />
+            <div className="flex items-start gap-2 p-3 text-xs rounded-lg bg-[#FBEDEE] border border-[#C75C62]/30 text-[#A63F46]">
+              <AlertCircle size={15} className="shrink-0 mt-0.5 text-[#C75C62]" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+            <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
               Service Name
             </label>
             <input
@@ -116,12 +116,12 @@ export default function ServiceModal({
               placeholder="e.g. Primary API Gateway"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+            <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
               Endpoint URL
             </label>
             <input
@@ -130,19 +130,19 @@ export default function ServiceModal({
               placeholder="https://api.example.com/health"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 font-mono transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] font-mono transition-colors"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 HTTP Method
               </label>
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 focus:outline-none focus:border-zinc-600 font-mono transition-colors"
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors"
               >
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
@@ -153,7 +153,7 @@ export default function ServiceModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Expected Status
               </label>
               <input
@@ -162,14 +162,14 @@ export default function ServiceModal({
                 max="599"
                 value={expectedCode}
                 onChange={(e) => setExpectedCode(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 font-mono focus:outline-none focus:border-zinc-600 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Interval (s)
               </label>
               <input
@@ -178,12 +178,12 @@ export default function ServiceModal({
                 max="86400"
                 value={interval}
                 onChange={(e) => setIntervalVal(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 font-mono focus:outline-none focus:border-zinc-600 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Timeout (s)
               </label>
               <input
@@ -192,12 +192,12 @@ export default function ServiceModal({
                 max="60"
                 value={timeout}
                 onChange={(e) => setTimeoutVal(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 font-mono focus:outline-none focus:border-zinc-600 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1.5">
                 Threshold
               </label>
               <input
@@ -206,14 +206,14 @@ export default function ServiceModal({
                 max="20"
                 value={failureThreshold}
                 onChange={(e) => setFailureThreshold(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-md text-zinc-100 font-mono focus:outline-none focus:border-zinc-600 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-lg text-[#18181B] focus:outline-none focus:border-[#5865D8] focus:ring-1 focus:ring-[#5865D8] transition-colors font-mono"
               />
             </div>
           </div>
 
           {/* Active status toggle */}
           <div className="pt-2 flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-300">Active Monitoring</span>
+            <span className="text-xs font-medium text-[#18181B]">Active Monitoring</span>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
@@ -221,23 +221,23 @@ export default function ServiceModal({
                 onChange={(e) => setIsActive(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-200 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+              <div className="w-9 h-5 bg-[#E5E7EB] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#D1D5DB] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#5865D8]"></div>
             </label>
           </div>
 
           {/* Modal Footer */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[#E5E7EB]">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-transparent hover:bg-zinc-800/80 rounded-md transition-colors"
+              className="px-4 py-2 text-xs font-medium text-[#71717A] hover:text-[#18181B] bg-transparent hover:bg-[#F3F4F6] rounded-lg transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 text-xs font-semibold rounded-md bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 font-mono"
+              className="px-4 py-2 text-xs font-medium rounded-lg bg-[#5865D8] hover:bg-[#4754C4] text-white shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
             >
               {loading ? 'Saving...' : isEditing ? 'Update Service' : 'Create Service'}
             </button>

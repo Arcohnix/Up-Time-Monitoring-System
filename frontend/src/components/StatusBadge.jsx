@@ -3,8 +3,8 @@ import React from 'react';
 export default function StatusBadge({ state, isActive = true }) {
   if (!isActive) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">
-        <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-[#F3F4F6] text-[#71717A]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#A1A1AA]" />
         Disabled
       </span>
     );
@@ -14,8 +14,8 @@ export default function StatusBadge({ state, isActive = true }) {
 
   if (s === 'HEALTHY') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/40">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-green" />
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-[#ECF7F0] text-[#347A55]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4D9F72] pulse-green" />
         Healthy
       </span>
     );
@@ -23,8 +23,8 @@ export default function StatusBadge({ state, isActive = true }) {
 
   if (s === 'FAILING' || s === 'DEGRADED') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-amber-950/40 text-amber-400 border border-amber-800/40">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 pulse-amber" />
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-[#FBF5E8] text-[#946F22]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#C99535] pulse-amber" />
         Degraded
       </span>
     );
@@ -32,16 +32,16 @@ export default function StatusBadge({ state, isActive = true }) {
 
   if (s === 'DOWN') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold bg-rose-950/50 text-rose-300 border border-rose-800/50">
-        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 pulse-red" />
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-[#FBEDEE] text-[#A63F46]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#C75C62] pulse-red" />
         Down
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-[#F3F4F6] text-[#71717A]">
+      <span className="w-1.5 h-1.5 rounded-full bg-[#A1A1AA]" />
       {state || 'Unknown'}
     </span>
   );

@@ -7,7 +7,7 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
     return (
       <div
         style={{ height }}
-        className="w-full flex items-center justify-center border border-dashed border-zinc-800 rounded-lg text-zinc-500 text-xs font-mono"
+        className="w-full flex items-center justify-center border border-dashed border-[#E5E7EB] rounded-xl text-[#A1A1AA] text-xs"
       >
         No latency data recorded in this time window
       </div>
@@ -24,7 +24,7 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
     return (
       <div
         style={{ height }}
-        className="w-full flex items-center justify-center border border-dashed border-zinc-800 rounded-lg text-zinc-500 text-xs font-mono"
+        className="w-full flex items-center justify-center border border-dashed border-[#E5E7EB] rounded-xl text-[#A1A1AA] text-xs"
       >
         Waiting for completed health probes...
       </div>
@@ -67,12 +67,12 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
     <div className="relative w-full">
       {/* Top summary stats */}
       {showStats && (
-        <div className="flex items-center justify-end gap-3 mb-2 text-xs font-mono text-zinc-400">
-          <span>Min: <span className="text-zinc-200">{Math.round(minVal)}ms</span></span>
-          <span className="text-zinc-700">•</span>
-          <span>Avg: <span className="text-cyan-400">{avgVal}ms</span></span>
-          <span className="text-zinc-700">•</span>
-          <span>Max: <span className="text-zinc-200">{Math.round(maxVal)}ms</span></span>
+        <div className="flex items-center justify-end gap-3 mb-2 text-xs text-[#71717A]">
+          <span>Min: <span className="text-[#18181B] font-medium">{Math.round(minVal)}ms</span></span>
+          <span className="text-[#E5E7EB]">•</span>
+          <span>Avg: <span className="text-[#5865D8] font-medium">{avgVal}ms</span></span>
+          <span className="text-[#E5E7EB]">•</span>
+          <span>Max: <span className="text-[#18181B] font-medium">{Math.round(maxVal)}ms</span></span>
         </div>
       )}
 
@@ -83,8 +83,8 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
       >
         <defs>
           <linearGradient id="rtGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+            <stop offset="0%" stopColor="#5865D8" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#5865D8" stopOpacity="0.00" />
           </linearGradient>
         </defs>
 
@@ -99,17 +99,17 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
                 y1={y}
                 x2={width - paddingX}
                 y2={y}
-                stroke="#27272a"
+                stroke="#E5E7EB"
                 strokeDasharray="4 4"
                 strokeWidth="1"
               />
               <text
                 x={paddingX - 8}
                 y={y + 3}
-                fill="#71717a"
+                fill="#A1A1AA"
                 fontSize="10"
                 textAnchor="end"
-                className="font-mono"
+                fontFamily="Inter, sans-serif"
               >
                 {label}ms
               </text>
@@ -117,20 +117,20 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
           );
         })}
 
-        {/* Area */}
+        {/* Subtle Area Fill */}
         <path d={areaD} fill="url(#rtGradient)" />
 
-        {/* Line */}
+        {/* Primary Data Line (Accent Color #5865D8) */}
         <path
           d={lineD}
           fill="none"
-          stroke="#06b6d4"
+          stroke="#5865D8"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {/* Interactive points */}
+        {/* Data points */}
         {coords.map((c, i) => {
           const isFailed = !c.raw.success;
           const isHovered = hovered && hovered.raw.id === c.raw.id;
@@ -139,9 +139,9 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
               key={i}
               cx={c.x}
               cy={c.y}
-              r={isHovered ? 5.5 : (isFailed ? 4 : 2.5)}
-              fill={isFailed ? '#f43f5e' : '#06b6d4'}
-              stroke="#09090b"
+              r={isHovered ? 5.5 : (isFailed ? 3.5 : 2.5)}
+              fill={isFailed ? '#C75C62' : '#5865D8'}
+              stroke="#FFFFFF"
               strokeWidth="1.5"
               className="cursor-pointer transition-all duration-150"
               onMouseEnter={() => setHovered(c)}
@@ -154,18 +154,18 @@ export default function ResponseTimeChart({ points = [], height = 180, showStats
       {/* Floating Tooltip */}
       {hovered && (
         <div
-          className="absolute z-20 top-2 right-4 bg-zinc-900 border border-zinc-700/80 rounded-md px-3 py-2 text-xs shadow-xl pointer-events-none font-mono"
+          className="absolute z-20 top-2 right-4 bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs shadow-md pointer-events-none"
         >
-          <div className="text-zinc-200 font-semibold mb-0.5">
+          <div className="text-[#18181B] font-medium mb-0.5">
             {hovered.raw.service_name || `Service #${hovered.raw.service_id}`}
           </div>
-          <div className="flex items-center gap-1.5 text-cyan-400">
+          <div className="flex items-center gap-1.5 text-[#5865D8] font-medium">
             <span>{hovered.raw.response_time_ms}ms</span>
             {hovered.raw.status_code && (
-              <span className="text-zinc-400">(HTTP {hovered.raw.status_code})</span>
+              <span className="text-[#71717A] font-normal">(HTTP {hovered.raw.status_code})</span>
             )}
           </div>
-          <div className="text-zinc-500 text-[11px] mt-0.5">
+          <div className="text-[#A1A1AA] text-[11px] mt-0.5">
             {new Date(hovered.raw.timestamp || hovered.raw.checked_at).toLocaleTimeString()}
           </div>
         </div>

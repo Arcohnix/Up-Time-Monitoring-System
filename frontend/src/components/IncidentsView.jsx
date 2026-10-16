@@ -62,78 +62,79 @@ export default function IncidentsView({ services = [], onSelectService }) {
   return (
     <div className="space-y-6">
 
-      {/* Top Incident Summary Cards */}
+      {/* Top Incident Summary Cards (Neutral) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 bg-zinc-900/90 border border-zinc-800 rounded-xl">
-          <div className="text-xs text-zinc-500 uppercase tracking-wider font-mono">
-            Active Incidents
+        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
+          <div className="text-xs font-medium text-[#71717A] flex items-center justify-between">
+            <span>Active Incidents</span>
+            {activeCount > 0 && <span className="w-2 h-2 rounded-full bg-[#C75C62] pulse-red" />}
           </div>
-          <div className={`text-3xl font-extrabold font-mono mt-1 ${activeCount > 0 ? 'text-rose-400' : 'text-zinc-100'}`}>
+          <div className="text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
             {activeCount}
           </div>
-          <div className="text-[11px] text-zinc-500 mt-1 font-mono">
-            {activeCount > 0 ? 'Critical outages currently ongoing' : 'All systems operating normally'}
+          <div className="text-[11px] text-[#A1A1AA] mt-1">
+            {activeCount > 0 ? 'Outages currently ongoing' : 'All systems operating normally'}
           </div>
         </div>
 
-        <div className="p-5 bg-zinc-900/90 border border-zinc-800 rounded-xl">
-          <div className="text-xs text-zinc-500 uppercase tracking-wider font-mono">
+        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
+          <div className="text-xs font-medium text-[#71717A]">
             Resolved Incidents
           </div>
-          <div className="text-3xl font-extrabold font-mono mt-1 text-emerald-400">
+          <div className="text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
             {resolvedCount}
           </div>
-          <div className="text-[11px] text-zinc-500 mt-1 font-mono">
+          <div className="text-[11px] text-[#A1A1AA] mt-1">
             Past outages automatically cleared
           </div>
         </div>
 
-        <div className="p-5 bg-zinc-900/90 border border-zinc-800 rounded-xl">
-          <div className="text-xs text-zinc-500 uppercase tracking-wider font-mono">
+        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
+          <div className="text-xs font-medium text-[#71717A]">
             Total Incidents
           </div>
-          <div className="text-3xl font-extrabold font-mono mt-1 text-zinc-100">
+          <div className="text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
             {incidents.length}
           </div>
-          <div className="text-[11px] text-zinc-500 mt-1 font-mono">
+          <div className="text-[11px] text-[#A1A1AA] mt-1">
             Recorded history across all services
           </div>
         </div>
       </div>
 
       {/* Main Incidents Table Card */}
-      <div className="p-6 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-4">
+      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-4">
         
         {/* Controls / Filter Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-zinc-800">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#E5E7EB]">
           <div className="flex items-center gap-2">
-            <ShieldAlert size={16} className="text-rose-400" />
-            <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-widest font-mono">
+            <ShieldAlert size={16} className="text-[#71717A]" />
+            <h2 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
               INCIDENTS LOG
             </h2>
           </div>
 
-          <div className="flex items-center p-1 bg-zinc-950 border border-zinc-800 rounded-lg text-xs font-mono">
+          <div className="flex items-center p-0.5 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg text-xs">
             <button
               onClick={() => setFilter('ALL')}
-              className={`px-3 py-1 rounded-md transition-colors ${
-                filter === 'ALL' ? 'bg-zinc-800 text-zinc-100 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+              className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                filter === 'ALL' ? 'bg-white text-[#18181B] font-semibold shadow-xs' : 'text-[#71717A] hover:text-[#18181B]'
               }`}
             >
               All ({incidents.length})
             </button>
             <button
               onClick={() => setFilter('OPEN')}
-              className={`px-3 py-1 rounded-md transition-colors ${
-                filter === 'OPEN' ? 'bg-rose-950 text-rose-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+              className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                filter === 'OPEN' ? 'bg-white text-[#A63F46] font-semibold shadow-xs' : 'text-[#71717A] hover:text-[#18181B]'
               }`}
             >
               Active ({activeCount})
             </button>
             <button
               onClick={() => setFilter('RESOLVED')}
-              className={`px-3 py-1 rounded-md transition-colors ${
-                filter === 'RESOLVED' ? 'bg-emerald-950 text-emerald-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+              className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                filter === 'RESOLVED' ? 'bg-white text-[#347A55] font-semibold shadow-xs' : 'text-[#71717A] hover:text-[#18181B]'
               }`}
             >
               Resolved ({resolvedCount})
@@ -144,8 +145,8 @@ export default function IncidentsView({ services = [], onSelectService }) {
         {/* Incidents Table */}
         {filteredIncidents.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="text-[11px] text-zinc-500 uppercase border-b border-zinc-800 bg-zinc-950/40">
+            <table className="w-full text-left text-xs">
+              <thead className="text-[11px] text-[#71717A] uppercase tracking-wider border-b border-[#E5E7EB] bg-[#F7F8FA]">
                 <tr>
                   <th className="py-2.5 px-3 font-medium">Status</th>
                   <th className="py-2.5 px-3 font-medium">Service</th>
@@ -156,7 +157,7 @@ export default function IncidentsView({ services = [], onSelectService }) {
                   <th className="py-2.5 px-3 font-medium">Root Cause / Recovery</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
+              <tbody className="divide-y divide-[#E5E7EB]">
                 {filteredIncidents.map((inc) => {
                   const isOpen = inc.status === 'OPEN';
                   const srv = serviceMap[inc.service_id];
@@ -164,56 +165,56 @@ export default function IncidentsView({ services = [], onSelectService }) {
                   return (
                     <tr
                       key={inc.id}
-                      className="hover:bg-zinc-800/40 transition-colors cursor-pointer"
+                      className="hover:bg-[#F7F8FA] transition-colors cursor-pointer"
                       onClick={() => onSelectService && onSelectService(inc.service_id)}
                     >
                       {/* Status */}
                       <td className="py-3 px-3 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold ${
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
                             isOpen
-                              ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
-                              : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                              ? 'bg-[#FBEDEE] text-[#A63F46] border-[#C75C62]/20'
+                              : 'bg-[#ECF7F0] text-[#347A55] border-[#4D9F72]/20'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-rose-400 pulse-red' : 'bg-emerald-400'}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-[#C75C62] pulse-red' : 'bg-[#4D9F72]'}`} />
                           {inc.status}
                         </span>
                       </td>
 
                       {/* Service */}
                       <td className="py-3 px-3">
-                        <div className="font-semibold text-zinc-200 hover:text-cyan-400 flex items-center gap-1">
+                        <div className="font-medium text-[#18181B] hover:text-[#5865D8] flex items-center gap-1 transition-colors">
                           <span>{srv ? srv.name : `Service #${inc.service_id}`}</span>
-                          <ExternalLink size={10} className="text-zinc-500" />
+                          <ExternalLink size={10} className="text-[#A1A1AA]" />
                         </div>
                         {srv && (
-                          <div className="text-[11px] text-zinc-500 truncate max-w-xs">{srv.url}</div>
+                          <div className="text-[11px] text-[#71717A] font-mono truncate max-w-xs">{srv.url}</div>
                         )}
                       </td>
 
                       {/* Start Time */}
-                      <td className="py-3 px-3 text-zinc-300 whitespace-nowrap">
+                      <td className="py-3 px-3 text-[#71717A] whitespace-nowrap">
                         {new Date(inc.started_at).toLocaleString()}
                       </td>
 
                       {/* Recovery Time */}
-                      <td className="py-3 px-3 text-zinc-400 whitespace-nowrap">
+                      <td className="py-3 px-3 text-[#71717A] whitespace-nowrap">
                         {inc.resolved_at ? (
                           new Date(inc.resolved_at).toLocaleString()
                         ) : (
-                          <span className="text-rose-400 font-semibold">— (Ongoing)</span>
+                          <span className="text-[#A63F46] font-medium">— (Ongoing)</span>
                         )}
                       </td>
 
                       {/* Duration */}
-                      <td className="py-3 px-3 text-zinc-300 whitespace-nowrap">
+                      <td className="py-3 px-3 text-[#18181B] font-medium whitespace-nowrap">
                         {formatDuration(inc.started_at, inc.resolved_at)}
                       </td>
 
                       {/* Failures */}
-                      <td className="py-3 px-3 text-zinc-300 whitespace-nowrap">
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[11px]">
+                      <td className="py-3 px-3 text-[#71717A] whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-md bg-[#F3F4F6] text-[#71717A] text-[11px] font-medium">
                           {inc.failure_count}
                         </span>
                       </td>
@@ -221,11 +222,11 @@ export default function IncidentsView({ services = [], onSelectService }) {
                       {/* Cause & Recovery Message */}
                       <td className="py-3 px-3 max-w-xs truncate">
                         {isOpen ? (
-                          <span className="text-rose-400">
+                          <span className="text-[#A63F46]">
                             {inc.last_error_message || inc.last_error_type || 'Unreachable'}
                           </span>
                         ) : (
-                          <span className="text-emerald-400">
+                          <span className="text-[#347A55]">
                             {inc.recovery_message || 'Recovered'}
                           </span>
                         )}
@@ -237,7 +238,7 @@ export default function IncidentsView({ services = [], onSelectService }) {
             </table>
           </div>
         ) : (
-          <div className="py-12 text-center text-xs font-mono text-zinc-500 border border-dashed border-zinc-800 rounded-lg">
+          <div className="py-12 text-center text-xs text-[#71717A] border border-dashed border-[#E5E7EB] rounded-xl">
             No incidents found matching the filter "{filter}".
           </div>
         )}
