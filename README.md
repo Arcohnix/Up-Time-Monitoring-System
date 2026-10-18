@@ -13,7 +13,7 @@ A high-performance, production-grade distributed health and uptime monitoring pl
 
 ---
 
-## 📸 Overview & Design Philosophy
+## Overview & Design Philosophy
 
 UTMS is designed with a **"Less UI, more hierarchy"** approach inspired by modern engineering tools like **Linear**, **Raycast**, and **Vercel**:
 - **Restrained Visual Palette**: Technical dark and light modes with soft status accents (muted green, soft amber, pastel red, lavender).
@@ -23,7 +23,7 @@ UTMS is designed with a **"Less UI, more hierarchy"** approach inspired by moder
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -60,7 +60,7 @@ UTMS is designed with a **"Less UI, more hierarchy"** approach inspired by moder
 
 ---
 
-## 🚀 Quick Start (One-Command Docker Setup)
+## Quick Start (One-Command Docker Setup)
 
 The recommended and fastest way to run the entire UTMS stack is using Docker Compose:
 
@@ -99,7 +99,7 @@ docker compose ps
 
 ---
 
-## 🌐 Access Points & Ports
+## Access Points & Ports
 
 | Service | URL | Default Credentials | Description |
 | :--- | :--- | :--- | :--- |
@@ -112,7 +112,7 @@ docker compose ps
 
 ---
 
-## ⚡ Core Features
+## Core Features
 
 ### 1. Asynchronous Distributed Health Prober
 - **Concurrent Non-Blocking Engine**: Evaluates HTTP/HTTPS endpoints concurrently via `asyncio` and `httpx`.
@@ -140,7 +140,7 @@ docker compose ps
 
 ---
 
-## 🛠️ Local Development (Without Docker)
+## Local Development (Without Docker)
 
 ### Backend Setup:
 ```bash
@@ -171,7 +171,7 @@ Open [http://localhost:5173](http://localhost:5173). Requests to `/api` and `/he
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## Testing & Quality Assurance
 
 ### Run Backend Tests (Pytest):
 ```bash
@@ -194,7 +194,7 @@ The project includes a multi-stage GitHub Actions CI pipeline ([`.github/workflo
 
 ---
 
-## 🐳 Docker Hub Images
+## Docker Hub Images
 
 Pre-built multi-arch images can be pulled directly:
 
