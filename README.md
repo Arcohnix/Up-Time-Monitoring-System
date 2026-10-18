@@ -200,13 +200,13 @@ Pre-built multi-arch images can be pulled directly:
 
 ```bash
 # Backend image
-docker pull arcohnix/utms-backend:latest
+docker pull arcohnixx/utms-backend:latest
 
 # Frontend image
-docker pull arcohnix/utms-frontend:latest
+docker pull arcohnixx/utms-frontend:latest
 
 # External Watchdog image
-docker pull arcohnix/utms-watchdog:latest
+docker pull arcohnixx/utms-watchdog:latest
 ```
 
 To build and tag locally for your own registry:
