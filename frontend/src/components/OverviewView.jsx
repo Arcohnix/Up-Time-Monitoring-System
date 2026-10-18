@@ -1,155 +1,173 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Play,
-  Edit2,
-  Trash2,
-  Power,
-  Search,
   Activity,
-  Plus,
-  Server,
+  Play,
+  ArrowRight,
+  ShieldAlert,
 } from 'lucide-react';
-import StatusBadge from './StatusBadge';
+import StatusIndicator from './StatusIndicator';
 import ResponseTimeChart from './ResponseTimeChart';
 
 export default function OverviewView({
   dashboardData,
   onSelectService,
-  onEditService,
-  onDeleteService,
   onTriggerCheck,
-  onToggleActive,
-  onOpenCreateModal,
+  onNavigateTab,
   probingId = null,
 }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterState, setFilterState] = useState('ALL'); // ALL, HEALTHY, DEGRADED, DOWN, DISABLED
-
   if (!dashboardData) return null;
 
   const {
-    overall_uptime_percentage,
-    overall_avg_response_time_ms,
-    total_services,
-    healthy_services,
-    down_services,
+    overall_uptime_percentage = 100,
+    overall_avg_response_time_ms = 0,
+    total_services = 0,
+    healthy_services = 0,
+    down_services = 0,
     services = [],
     recent_response_times = [],
     active_incidents = [],
   } = dashboardData;
 
-  const filteredServices = services.filter((svc) => {
-    // Search
-    const matchesSearch =
-      svc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      svc.url.toLowerCase().includes(searchTerm.toLowerCase());
-    if (!matchesSearch) return false;
+  const degradedServices = services.filter(
+    (s) => s.is_active && (s.current_state === 'FAILING' || s.current_state === 'DEGRADED')
+  ).length;
 
-    // Filter tab
-    if (filterState === 'ALL') return true;
-    if (filterState === 'DISABLED') return !svc.is_active;
-    if (!svc.is_active) return false; // Other filters only apply to active services
-    if (filterState === 'HEALTHY') return svc.current_state === 'HEALTHY';
-    if (filterState === 'DEGRADED') return svc.current_state === 'FAILING';
-    if (filterState === 'DOWN') return svc.current_state === 'DOWN';
-    return true;
-  });
+  const hasOutage = down_services > 0 || active_incidents.length > 0;
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   return (
-    <div className="space-y-6">
-
-      {/* 1. Overview Statistics (Neutral Metric Cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {/* Overall Uptime */}
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">
-            Overall Uptime
+    <div className="space-y-6 animate-in fade-in duration-150">
+      {/* =====================================================================
+          1. HEADER GREETING & OPERATIONAL STATEMENT
+          Do NOT make this huge. Subtle, calm, technical confidence.
+          ===================================================================== */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+        <div>
+          <div className="text-xs text-[var(--text-muted)] font-medium">
+            {getGreeting()}
           </div>
-          <div className="text-2xl sm:text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {overall_uptime_percentage.toFixed(2)}%
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            Global probe success
-          </div>
+          <h1 className="text-lg font-semibold tracking-tight text-[var(--text-primary)] mt-0.5">
+            {hasOutage
+              ? `${down_services} monitor${down_services === 1 ? '' : 's'} experiencing outage`
+              : 'Everything is operating normally'}
+          </h1>
         </div>
-
-        {/* Avg Response Time */}
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">
-            Avg Latency
-          </div>
-          <div className="text-2xl sm:text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {overall_avg_response_time_ms !== null && overall_avg_response_time_ms !== undefined
-              ? `${Math.round(overall_avg_response_time_ms)}ms`
-              : '—'}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            Across active targets
-          </div>
+        <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              hasOutage ? 'bg-[var(--status-down-dot)] pulse-red' : 'bg-[var(--status-healthy-dot)] pulse-green'
+            }`}
+          />
+          <span>Continuous fleet probing active</span>
         </div>
+      </div>
 
-        {/* Total Services */}
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">
-            Total Services
+      {/* =====================================================================
+          2. HEALTH SUMMARY (HORIZONTAL METRIC STRIP)
+          Instead of 6–10 generic cards, a clean horizontal summary
+          Minimal separators. No excessive cards.
+          ===================================================================== */}
+      <div className="p-4 sm:p-5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)]">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+          {/* Total Monitors */}
+          <div className="pt-2 sm:pt-0 sm:px-3 first:pl-0">
+            <div className="text-xl sm:text-2xl font-semibold tracking-tight font-mono text-[var(--text-primary)]">
+              {total_services}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              Monitors
+            </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {total_services}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            Registered endpoints
-          </div>
-        </div>
 
-        {/* Healthy Services */}
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">
-            Healthy Services
+          {/* Healthy */}
+          <div className="pt-2 sm:pt-0 sm:px-3">
+            <div className="text-xl sm:text-2xl font-semibold tracking-tight font-mono text-[var(--status-healthy-text)]">
+              {healthy_services}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              Healthy
+            </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {healthy_services}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            Meeting SLO / threshold
-          </div>
-        </div>
 
-        {/* Active Incidents */}
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A] flex items-center justify-between">
-            <span>Active Incidents</span>
-            {active_incidents.length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-[#C75C62] pulse-red" />
-            )}
+          {/* Degraded */}
+          <div className="pt-2 sm:pt-0 sm:px-3">
+            <div className="text-xl sm:text-2xl font-semibold tracking-tight font-mono text-[var(--status-degraded-text)]">
+              {degradedServices}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              Degraded
+            </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {active_incidents.length}
+
+          {/* Down */}
+          <div className="pt-2 sm:pt-0 sm:px-3">
+            <div className={`text-xl sm:text-2xl font-semibold tracking-tight font-mono ${down_services > 0 ? 'text-[var(--status-down-text)]' : 'text-[var(--text-primary)]'}`}>
+              {down_services}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              Down
+            </div>
           </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            {down_services > 0 ? `${down_services} endpoint(s) down` : '0 ongoing outages'}
+
+          {/* Overall Uptime */}
+          <div className="pt-2 sm:pt-0 sm:px-3">
+            <div className="text-xl sm:text-2xl font-semibold tracking-tight font-mono text-[var(--text-primary)]">
+              {overall_uptime_percentage ? `${overall_uptime_percentage.toFixed(2)}%` : '100.00%'}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center justify-between">
+              <span>Fleet Uptime</span>
+              {overall_avg_response_time_ms ? (
+                <span className="font-mono text-[11px] text-[var(--accent-text)]">
+                  {Math.round(overall_avg_response_time_ms)}ms avg
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Active Incidents Subtle Alert Banner (Soft Status Down Colors) */}
+      {/* =====================================================================
+          3. ACTIVE INCIDENTS ALERT STRIP (IF ANY)
+          ===================================================================== */}
       {active_incidents.length > 0 && (
-        <div className="p-4 bg-[#FBEDEE] border border-[#C75C62]/20 rounded-xl">
-          <div className="flex items-center gap-2 text-[#A63F46] text-xs font-semibold mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#C75C62] pulse-red" />
-            <span>ACTIVE INCIDENT DETECTED ({active_incidents.length})</span>
+        <div className="p-4 bg-[var(--status-down-bg)] border border-[var(--status-down-border)] rounded-xl text-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[var(--status-down-text)] font-semibold">
+              <ShieldAlert size={15} />
+              <span>{active_incidents.length} ACTIVE INCIDENT{active_incidents.length === 1 ? '' : 'S'}</span>
+            </div>
+            <button
+              onClick={() => onNavigateTab('INCIDENTS')}
+              className="text-[11px] text-[var(--status-down-text)] hover:underline flex items-center gap-1 cursor-pointer font-medium"
+            >
+              <span>View all incidents</span>
+              <ArrowRight size={11} />
+            </button>
           </div>
-          <div className="space-y-1.5">
+          <div className="divide-y divide-[var(--status-down-border)]">
             {active_incidents.map((inc) => (
               <div
                 key={inc.id}
                 onClick={() => onSelectService(inc.service_id)}
-                className="text-xs text-[#18181B] hover:text-[#A63F46] cursor-pointer flex items-center justify-between transition-colors"
+                className="py-1.5 flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity"
               >
-                <span>
-                  <strong className="text-[#A63F46] font-medium">Incident #{inc.id}:</strong> Service #{inc.service_id} — {inc.last_error_message || 'Probe failure'}
-                </span>
-                <span className="text-[#71717A] text-[11px]">
-                  Started: {new Date(inc.started_at).toLocaleTimeString()}
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-down-dot)] pulse-red shrink-0" />
+                  <span className="font-medium text-[var(--text-primary)]">
+                    Service #{inc.service_id}:
+                  </span>
+                  <span className="text-[var(--text-secondary)] truncate max-w-md">
+                    {inc.last_error_message || 'Probe check failed'}
+                  </span>
+                </div>
+                <span className="text-[11px] text-[var(--text-muted)] font-mono shrink-0">
+                  {new Date(inc.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             ))}
@@ -157,210 +175,118 @@ export default function OverviewView({
         </div>
       )}
 
-      {/* 2. Global Latency Trend Chart */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-3">
+      {/* =====================================================================
+          4. FLEET LATENCY TREND
+          Minimalist chart with soft purple curve and hover precision tooltip
+          ===================================================================== */}
+      <div className="p-5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)] space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity size={16} className="text-[#5865D8]" />
-            <h2 className="text-xs font-semibold text-[#71717A] uppercase tracking-wider">
-              RESPONSE TIME OVER TIME
+            <Activity size={14} className="text-[var(--accent-primary)]" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              Fleet Latency
             </h2>
           </div>
-          <span className="text-xs text-[#A1A1AA]">Global health probe latency</span>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            Recent probe response times
+          </span>
         </div>
 
-        <ResponseTimeChart points={recent_response_times} height={160} />
+        <ResponseTimeChart points={recent_response_times} height={150} showStats={true} />
       </div>
 
-      {/* 3. Service List Table */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-4">
-        
-        {/* Table Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#E5E7EB]">
+      {/* =====================================================================
+          5. PRIMARY MONITORS LIST
+          Clear scanning, compact typography, aligned data, subtle separators
+          ===================================================================== */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)]">
           <div className="flex items-center gap-2">
-            <Server size={16} className="text-[#71717A]" />
-            <h2 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
-              MONITORED SERVICES ({services.length})
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              Active Monitors ({services.length})
             </h2>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Search Input */}
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-2.5 text-[#A1A1AA]" />
-              <input
-                type="text"
-                placeholder="Filter services..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs bg-[#F7F8FA] border border-[#E5E7EB] rounded-lg text-[#18181B] placeholder-[#A1A1AA] focus:outline-none focus:border-[#5865D8] focus:bg-white focus:ring-1 focus:ring-[#5865D8] transition-colors"
-              />
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex items-center p-0.5 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg text-[11px]">
-              {['ALL', 'HEALTHY', 'DEGRADED', 'DOWN', 'DISABLED'].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilterState(f)}
-                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                    filterState === f
-                      ? 'bg-white text-[#18181B] font-semibold shadow-xs'
-                      : 'text-[#71717A] hover:text-[#18181B]'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            {/* Add Service Trigger (5% Accent Color) */}
-            <button
-              onClick={onOpenCreateModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#5865D8] hover:bg-[#4754C4] text-white shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus size={13} />
-              <span>Add Service</span>
-            </button>
-          </div>
+          <button
+            onClick={() => onNavigateTab('MONITORS')}
+            className="text-xs text-[var(--accent-text)] hover:text-[var(--accent-hover)] font-medium flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <span>View all monitors</span>
+            <ArrowRight size={12} />
+          </button>
         </div>
 
-        {/* Services Table */}
-        {filteredServices.length > 0 ? (
+        {services.length === 0 ? (
+          <div className="py-12 text-center text-xs text-[var(--text-muted)]">
+            No monitors configured yet. Add your first endpoint to start tracking.
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="text-[11px] text-[#71717A] uppercase tracking-wider border-b border-[#E5E7EB] bg-[#F7F8FA]">
+              <thead className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)]">
                 <tr>
-                  <th className="py-2.5 px-3 font-medium">Service Name</th>
-                  <th className="py-2.5 px-3 font-medium">URL</th>
-                  <th className="py-2.5 px-3 font-medium">Status</th>
-                  <th className="py-2.5 px-3 font-medium text-right">Uptime</th>
-                  <th className="py-2.5 px-3 font-medium text-right">Response Time</th>
-                  <th className="py-2.5 px-3 font-medium text-center">Status Code</th>
-                  <th className="py-2.5 px-3 font-medium">Last Check</th>
-                  <th className="py-2.5 px-3 font-medium text-right">Actions</th>
+                  <th className="py-2 px-4 font-medium">Service</th>
+                  <th className="py-2 px-4 font-medium">Status</th>
+                  <th className="py-2 px-4 font-medium text-right">Latency</th>
+                  <th className="py-2 px-4 font-medium text-right">Uptime</th>
+                  <th className="py-2 px-4 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E7EB]">
-                {filteredServices.map((svc) => (
+              <tbody className="divide-y divide-[var(--border-subtle)]">
+                {services.slice(0, 6).map((svc) => (
                   <tr
                     key={svc.id}
-                    className="hover:bg-[#F7F8FA] transition-colors group cursor-pointer"
                     onClick={() => onSelectService(svc.id)}
+                    className="hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer group"
                   >
-                    {/* Service Name */}
-                    <td className="py-3 px-3">
-                      <div className="font-medium text-[#18181B] group-hover:text-[#5865D8] transition-colors flex items-center gap-1.5">
-                        <span>{svc.name}</span>
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-[var(--text-primary)] group-hover:text-[var(--accent-text)] transition-colors">
+                        {svc.name}
                       </div>
-                      <div className="text-[11px] text-[#71717A] mt-0.5">
-                        {svc.http_method} • Every {svc.check_interval_seconds}s
+                      <div className="text-[11px] text-[var(--text-muted)] font-mono truncate max-w-xs mt-0.5">
+                        {svc.url}
                       </div>
                     </td>
-
-                    {/* URL */}
-                    <td className="py-3 px-3 max-w-xs truncate text-[#71717A] font-mono text-xs">
-                      <span title={svc.url}>{svc.url}</span>
+                    <td className="py-3 px-4">
+                      <StatusIndicator state={svc.current_state} isActive={svc.is_active} />
                     </td>
-
-                    {/* Current Status */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <StatusBadge state={svc.current_state} isActive={svc.is_active} />
-                    </td>
-
-                    {/* Uptime */}
-                    <td className="py-3 px-3 text-right font-medium text-[#18181B] whitespace-nowrap">
-                      {svc.uptime_percentage.toFixed(2)}%
-                    </td>
-
-                    {/* Response Time */}
-                    <td className="py-3 px-3 text-right text-[#71717A] font-medium whitespace-nowrap">
-                      {svc.avg_response_time_ms !== null && svc.avg_response_time_ms !== undefined
-                        ? `${Math.round(svc.avg_response_time_ms)}ms`
-                        : '—'}
-                    </td>
-
-                    {/* Status Code */}
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      {svc.last_status_code ? (
-                        <span
-                          className={`px-1.5 py-0.5 rounded-md text-[11px] font-medium ${
-                            svc.last_status_code >= 200 && svc.last_status_code < 300
-                              ? 'bg-[#ECF7F0] text-[#347A55]'
-                              : 'bg-[#FBEDEE] text-[#A63F46]'
-                          }`}
-                        >
-                          {svc.last_status_code}
+                    <td className="py-3 px-4 text-right font-mono">
+                      {svc.recent_latency_ms !== null && svc.recent_latency_ms !== undefined ? (
+                        <span className="text-[var(--text-primary)] font-medium">
+                          {Math.round(svc.recent_latency_ms)}ms
                         </span>
                       ) : (
-                        <span className="text-[#A1A1AA]">—</span>
+                        <span className="text-[var(--text-muted)]">—</span>
                       )}
                     </td>
-
-                    {/* Last Check */}
-                    <td className="py-3 px-3 text-[#71717A] whitespace-nowrap text-xs">
-                      {svc.last_checked_at
-                        ? new Date(svc.last_checked_at).toLocaleTimeString()
-                        : 'Never'}
+                    <td className="py-3 px-4 text-right font-mono text-[var(--text-secondary)]">
+                      {svc.uptime_percentage !== null && svc.uptime_percentage !== undefined
+                        ? `${svc.uptime_percentage.toFixed(1)}%`
+                        : '100%'}
                     </td>
-
-                    {/* Actions */}
-                    <td
-                      className="py-3 px-3 text-right whitespace-nowrap"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          onClick={() => onTriggerCheck(svc.id)}
-                          disabled={probingId === svc.id}
-                          title="Run probe now"
-                          className="p-1 rounded-md text-[#71717A] hover:text-[#5865D8] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer"
-                        >
-                          <Play size={13} fill="currentColor" className={probingId === svc.id ? 'animate-spin' : ''} />
-                        </button>
-
-                        <button
-                          onClick={() => onToggleActive(svc.id, !svc.is_active)}
-                          title={svc.is_active ? 'Pause monitoring' : 'Resume monitoring'}
-                          className={`p-1 rounded-md hover:bg-[#F3F4F6] transition-colors cursor-pointer ${
-                            svc.is_active ? 'text-[#71717A] hover:text-[#18181B]' : 'text-[#4D9F72]'
-                          }`}
-                        >
-                          <Power size={13} />
-                        </button>
-
-                        <button
-                          onClick={() => onEditService(svc)}
-                          title="Edit configuration"
-                          className="p-1 rounded-md text-[#71717A] hover:text-[#18181B] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-
-                        <button
-                          onClick={() => onDeleteService(svc.id, svc.name)}
-                          title="Delete service"
-                          className="p-1 rounded-md text-[#71717A] hover:text-[#C75C62] hover:bg-[#FBEDEE] transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTriggerCheck(svc.id);
+                        }}
+                        disabled={probingId === svc.id}
+                        title="Probe service now"
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] transition-colors cursor-pointer"
+                      >
+                        <Play
+                          size={12}
+                          fill="currentColor"
+                          className={probingId === svc.id ? 'animate-spin text-[var(--accent-primary)]' : ''}
+                        />
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="py-12 text-center text-xs text-[#71717A] border border-dashed border-[#E5E7EB] rounded-xl">
-            {services.length === 0
-              ? 'No services registered yet. Click "Add Service" above to start monitoring.'
-              : 'No services match the current filter or search criteria.'}
-          </div>
         )}
-
       </div>
-
     </div>
   );
 }

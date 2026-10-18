@@ -1,7 +1,9 @@
 from typing import List, Optional
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.check_result import CheckResultModel
+from app.models.incident import IncidentModel
 from app.models.service import Service
 from app.schemas.service import ServiceCreate, ServiceUpdate
 
@@ -70,6 +72,8 @@ async def update_service(
 
 
 async def delete_service(db: AsyncSession, service: Service) -> None:
-    """Delete a monitored service."""
+    """Delete a monitored service and its associated historical checks and incidents."""
+    await db.execute(delete(CheckResultModel).where(CheckResultModel.service_id == service.id))
+    await db.execute(delete(IncidentModel).where(IncidentModel.service_id == service.id))
     await db.delete(service)
     await db.commit()

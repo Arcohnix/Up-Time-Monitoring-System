@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, ExternalLink } from 'lucide-react';
+import {
+  ShieldAlert,
+  ArrowRight,
+  ExternalLink,
+  ChevronRight,
+  CheckCircle2,
+  AlertTriangle,
+  Mail,
+  RotateCcw,
+} from 'lucide-react';
 import { getIncidents } from '../api';
 
 export default function IncidentsView({ services = [], onSelectService }) {
   const [incidents, setIncidents] = useState([]);
   const [filter, setFilter] = useState('ALL'); // ALL, OPEN, RESOLVED
+  const [selectedIncident, setSelectedIncident] = useState(null);
 
-  // Map serviceId to service object
   const serviceMap = React.useMemo(() => {
     const map = {};
     services.forEach((s) => {
@@ -20,7 +29,7 @@ export default function IncidentsView({ services = [], onSelectService }) {
       const data = await getIncidents({ limit: 100 });
       setIncidents(data || []);
     } catch {
-      // Handled silently for periodic polling
+      // Silently handled for background sync
     }
   };
 
@@ -36,8 +45,8 @@ export default function IncidentsView({ services = [], onSelectService }) {
     return true;
   });
 
-  const activeCount = incidents.filter((i) => i.status === 'OPEN').length;
-  const resolvedCount = incidents.filter((i) => i.status === 'RESOLVED').length;
+  const activeIncidents = incidents.filter((i) => i.status === 'OPEN');
+  const resolvedIncidents = incidents.filter((i) => i.status === 'RESOLVED');
 
   const formatDuration = (startStr, endStr) => {
     const start = new Date(startStr);
@@ -47,7 +56,7 @@ export default function IncidentsView({ services = [], onSelectService }) {
     if (!endStr) {
       const mins = Math.floor(totalSec / 60);
       const secs = totalSec % 60;
-      return `Ongoing (${mins}m ${secs}s)`;
+      return `${mins}m ${secs}s`;
     }
 
     if (totalSec < 60) return `${totalSec}s`;
@@ -59,192 +68,272 @@ export default function IncidentsView({ services = [], onSelectService }) {
     return `${hours}h ${remMins}m`;
   };
 
+  const getTimelineSteps = (inc) => {
+    const service = serviceMap[inc.service_id];
+    const steps = [];
+
+    const startTime = new Date(inc.started_at);
+
+    // Initial check failures leading up to threshold
+    const failureCount = inc.failure_count || 3;
+    steps.push({
+      time: startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      title: 'Health check probe failed',
+      desc: inc.last_error_message || 'Connection refused or HTTP timeout',
+      type: 'failure',
+      icon: AlertTriangle,
+    });
+
+    // Threshold reached & incident created
+    steps.push({
+      time: startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      title: `Incident #${inc.id} created`,
+      desc: `Reached consecutive failure threshold (${failureCount}x failures) on ${service?.name || 'service'}. Target marked DOWN.`,
+      type: 'incident',
+      icon: ShieldAlert,
+    });
+
+    // Notification alert dispatched
+    steps.push({
+      time: startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      title: 'Alert notification dispatched',
+      desc: 'Email alert sent to configured recipients (arcohnix8@gmail.com).',
+      type: 'notification',
+      icon: Mail,
+    });
+
+    // Recovery
+    if (inc.status === 'RESOLVED' && inc.resolved_at) {
+      const resolvedTime = new Date(inc.resolved_at);
+      steps.push({
+        time: resolvedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        title: 'Service recovered',
+        desc: inc.recovery_message || 'HTTP 200 OK received. Target returned to healthy state.',
+        type: 'recovery',
+        icon: RotateCcw,
+      });
+
+      steps.push({
+        time: resolvedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        title: `Incident #${inc.id} resolved`,
+        desc: 'Resolution alert dispatched. Total duration: ' + formatDuration(inc.started_at, inc.resolved_at),
+        type: 'resolved',
+        icon: CheckCircle2,
+      });
+    }
+
+    return steps;
+  };
+
   return (
-    <div className="space-y-6">
-
-      {/* Top Incident Summary Cards (Neutral) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A] flex items-center justify-between">
-            <span>Active Incidents</span>
-            {activeCount > 0 && <span className="w-2 h-2 rounded-full bg-[#C75C62] pulse-red" />}
-          </div>
-          <div className="text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {activeCount}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            {activeCount > 0 ? 'Outages currently ongoing' : 'All systems operating normally'}
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-150">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
+            Incident Management
+          </h1>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            Fleet outage tracking, threshold triggers, and automated alert logs
+          </p>
         </div>
 
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">
-            Resolved Incidents
-          </div>
-          <div className="text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {resolvedCount}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            Past outages automatically cleared
-          </div>
-        </div>
-
-        <div className="p-5 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">
-            Total Incidents
-          </div>
-          <div className="text-3xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {incidents.length}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">
-            Recorded history across all services
-          </div>
+        {/* Filter Pills */}
+        <div className="flex items-center p-0.5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg text-[11px]">
+          <button
+            onClick={() => setFilter('ALL')}
+            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+              filter === 'ALL'
+                ? 'bg-[var(--bg-surface-subtle)] text-[var(--text-primary)] font-medium'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            All ({incidents.length})
+          </button>
+          <button
+            onClick={() => setFilter('OPEN')}
+            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+              filter === 'OPEN'
+                ? 'bg-[var(--status-down-bg)] text-[var(--status-down-text)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            Active ({activeIncidents.length})
+          </button>
+          <button
+            onClick={() => setFilter('RESOLVED')}
+            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+              filter === 'RESOLVED'
+                ? 'bg-[var(--bg-surface-subtle)] text-[var(--text-primary)] font-medium'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            Resolved ({resolvedIncidents.length})
+          </button>
         </div>
       </div>
 
-      {/* Main Incidents Table Card */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-4">
-        
-        {/* Controls / Filter Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#E5E7EB]">
-          <div className="flex items-center gap-2">
-            <ShieldAlert size={16} className="text-[#71717A]" />
-            <h2 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
-              INCIDENTS LOG
-            </h2>
-          </div>
+      {/* Main Content Layout: List + Timeline Detail Drawer/Card */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Incident List Column */}
+        <div className={selectedIncident ? 'lg:col-span-7 space-y-3' : 'lg:col-span-12 space-y-3'}>
+          {filteredIncidents.length === 0 ? (
+            <div className="p-12 text-center bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-muted)]">
+              No incidents found in this category. All systems operating normally.
+            </div>
+          ) : (
+            filteredIncidents.map((inc) => {
+              const svc = serviceMap[inc.service_id];
+              const isOpen = inc.status === 'OPEN';
+              const isSelected = selectedIncident?.id === inc.id;
 
-          <div className="flex items-center p-0.5 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg text-xs">
-            <button
-              onClick={() => setFilter('ALL')}
-              className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                filter === 'ALL' ? 'bg-white text-[#18181B] font-semibold shadow-xs' : 'text-[#71717A] hover:text-[#18181B]'
-              }`}
-            >
-              All ({incidents.length})
-            </button>
-            <button
-              onClick={() => setFilter('OPEN')}
-              className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                filter === 'OPEN' ? 'bg-white text-[#A63F46] font-semibold shadow-xs' : 'text-[#71717A] hover:text-[#18181B]'
-              }`}
-            >
-              Active ({activeCount})
-            </button>
-            <button
-              onClick={() => setFilter('RESOLVED')}
-              className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
-                filter === 'RESOLVED' ? 'bg-white text-[#347A55] font-semibold shadow-xs' : 'text-[#71717A] hover:text-[#18181B]'
-              }`}
-            >
-              Resolved ({resolvedCount})
-            </button>
-          </div>
-        </div>
-
-        {/* Incidents Table */}
-        {filteredIncidents.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="text-[11px] text-[#71717A] uppercase tracking-wider border-b border-[#E5E7EB] bg-[#F7F8FA]">
-                <tr>
-                  <th className="py-2.5 px-3 font-medium">Status</th>
-                  <th className="py-2.5 px-3 font-medium">Service</th>
-                  <th className="py-2.5 px-3 font-medium">Start Time</th>
-                  <th className="py-2.5 px-3 font-medium">Recovery Time</th>
-                  <th className="py-2.5 px-3 font-medium">Duration</th>
-                  <th className="py-2.5 px-3 font-medium">Failures</th>
-                  <th className="py-2.5 px-3 font-medium">Root Cause / Recovery</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E5E7EB]">
-                {filteredIncidents.map((inc) => {
-                  const isOpen = inc.status === 'OPEN';
-                  const srv = serviceMap[inc.service_id];
-
-                  return (
-                    <tr
-                      key={inc.id}
-                      className="hover:bg-[#F7F8FA] transition-colors cursor-pointer"
-                      onClick={() => onSelectService && onSelectService(inc.service_id)}
-                    >
-                      {/* Status */}
-                      <td className="py-3 px-3 whitespace-nowrap">
+              return (
+                <div
+                  key={inc.id}
+                  onClick={() => setSelectedIncident(inc)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-[var(--accent-primary)] bg-[var(--bg-surface-hover)] shadow-sm'
+                      : isOpen
+                      ? 'border-[var(--status-down-border)] bg-[var(--status-down-bg)] hover:border-[var(--status-down-dot)]'
+                      : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            isOpen ? 'bg-[var(--status-down-dot)] pulse-red' : 'bg-[var(--text-muted)]'
+                          }`}
+                        />
+                        <span className="font-semibold text-xs text-[var(--text-primary)]">
+                          {svc?.name || `Service #${inc.service_id}`}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.2 rounded border ${
                             isOpen
-                              ? 'bg-[#FBEDEE] text-[#A63F46] border-[#C75C62]/20'
-                              : 'bg-[#ECF7F0] text-[#347A55] border-[#4D9F72]/20'
+                              ? 'text-[var(--status-down-text)] border-[var(--status-down-border)] bg-[var(--status-down-bg)] font-semibold'
+                              : 'text-[var(--text-muted)] border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)]'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-[#C75C62] pulse-red' : 'bg-[#4D9F72]'}`} />
-                          {inc.status}
+                          {isOpen ? 'Down' : 'Resolved'}
                         </span>
-                      </td>
+                      </div>
 
-                      {/* Service */}
-                      <td className="py-3 px-3">
-                        <div className="font-medium text-[#18181B] hover:text-[#5865D8] flex items-center gap-1 transition-colors">
-                          <span>{srv ? srv.name : `Service #${inc.service_id}`}</span>
-                          <ExternalLink size={10} className="text-[#A1A1AA]" />
-                        </div>
-                        {srv && (
-                          <div className="text-[11px] text-[#71717A] font-mono truncate max-w-xs">{srv.url}</div>
-                        )}
-                      </td>
+                      <div className="text-xs text-[var(--text-secondary)] truncate">
+                        {inc.last_error_message || 'Probe timeout or connection failure'}
+                      </div>
 
-                      {/* Start Time */}
-                      <td className="py-3 px-3 text-[#71717A] whitespace-nowrap">
-                        {new Date(inc.started_at).toLocaleString()}
-                      </td>
-
-                      {/* Recovery Time */}
-                      <td className="py-3 px-3 text-[#71717A] whitespace-nowrap">
-                        {inc.resolved_at ? (
-                          new Date(inc.resolved_at).toLocaleString()
-                        ) : (
-                          <span className="text-[#A63F46] font-medium">— (Ongoing)</span>
-                        )}
-                      </td>
-
-                      {/* Duration */}
-                      <td className="py-3 px-3 text-[#18181B] font-medium whitespace-nowrap">
-                        {formatDuration(inc.started_at, inc.resolved_at)}
-                      </td>
-
-                      {/* Failures */}
-                      <td className="py-3 px-3 text-[#71717A] whitespace-nowrap">
-                        <span className="px-1.5 py-0.5 rounded-md bg-[#F3F4F6] text-[#71717A] text-[11px] font-medium">
-                          {inc.failure_count}
+                      <div className="text-[11px] text-[var(--text-muted)] font-mono flex items-center gap-3 pt-0.5">
+                        <span>Started: {new Date(inc.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>•</span>
+                        <span>
+                          Duration: {formatDuration(inc.started_at, inc.resolved_at)}
                         </span>
-                      </td>
-
-                      {/* Cause & Recovery Message */}
-                      <td className="py-3 px-3 max-w-xs truncate">
-                        {isOpen ? (
-                          <span className="text-[#A63F46]">
-                            {inc.last_error_message || inc.last_error_type || 'Unreachable'}
-                          </span>
-                        ) : (
-                          <span className="text-[#347A55]">
-                            {inc.recovery_message || 'Recovered'}
-                          </span>
+                        {inc.failure_count && (
+                          <>
+                            <span>•</span>
+                            <span>{inc.failure_count} consecutive failures</span>
+                          </>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="py-12 text-center text-xs text-[#71717A] border border-dashed border-[#E5E7EB] rounded-xl">
-            No incidents found matching the filter "{filter}".
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectService(inc.service_id);
+                        }}
+                        className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded hover:bg-[var(--bg-surface-subtle)] transition-colors"
+                        title="View Monitor"
+                      >
+                        <ExternalLink size={12} />
+                      </button>
+                      <ChevronRight size={14} className="text-[var(--text-muted)]" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Incident Detail Timeline Column */}
+        {selectedIncident && (
+          <div className="lg:col-span-5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-[var(--shadow-subtle)] space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div>
+                <div className="text-xs font-semibold text-[var(--text-primary)]">
+                  Incident #{selectedIncident.id} Timeline
+                </div>
+                <div className="text-[11px] text-[var(--text-muted)] font-mono mt-0.5">
+                  {serviceMap[selectedIncident.service_id]?.name || `Service #${selectedIncident.service_id}`}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedIncident(null)}
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded hover:bg-[var(--bg-surface-subtle)] cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Timeline Steps */}
+            <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-[var(--border-subtle)]">
+              {getTimelineSteps(selectedIncident).map((step, idx) => {
+                const Icon = step.icon;
+                const isFail = step.type === 'failure' || step.type === 'incident';
+                const isRecovery = step.type === 'recovery' || step.type === 'resolved';
+
+                return (
+                  <div key={idx} className="relative flex items-start gap-3 pl-1">
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 z-10 ${
+                        isFail
+                          ? 'bg-[var(--status-down-bg)] text-[var(--status-down-text)] border border-[var(--status-down-border)]'
+                          : isRecovery
+                          ? 'bg-[var(--status-healthy-bg)] text-[var(--status-healthy-text)] border border-[var(--status-healthy-border)]'
+                          : 'bg-[var(--bg-surface-subtle)] text-[var(--accent-text)] border border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      <Icon size={11} />
+                    </div>
+
+                    <div className="min-w-0 space-y-0.5 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-[var(--text-primary)]">
+                          {step.title}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                          {step.time}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                        {step.desc}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs">
+              <span className="text-[var(--text-muted)] font-mono text-[11px]">
+                Status: {selectedIncident.status}
+              </span>
+              <button
+                onClick={() => onSelectService(selectedIncident.service_id)}
+                className="text-[var(--accent-text)] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Monitor Telemetry</span>
+                <ArrowRight size={11} />
+              </button>
+            </div>
           </div>
         )}
-
       </div>
-
     </div>
   );
 }

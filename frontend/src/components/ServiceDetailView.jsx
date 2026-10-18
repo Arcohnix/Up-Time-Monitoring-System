@@ -6,10 +6,10 @@ import {
   Trash2,
   Power,
   ExternalLink,
+  ShieldAlert,
+  Activity,
   CheckCircle2,
   XCircle,
-  Activity,
-  ShieldAlert,
 } from 'lucide-react';
 import {
   getService,
@@ -20,8 +20,9 @@ import {
   updateService,
   deleteService,
 } from '../api';
-import StatusBadge from './StatusBadge';
+import StatusIndicator from './StatusIndicator';
 import ResponseTimeChart from './ResponseTimeChart';
+import { useToast } from '../context/ToastContext';
 
 export default function ServiceDetailView({ serviceId, onBack, onEdit, onDeleted }) {
   const [service, setService] = useState(null);
@@ -31,6 +32,7 @@ export default function ServiceDetailView({ serviceId, onBack, onEdit, onDeleted
   const [loading, setLoading] = useState(true);
   const [probing, setProbing] = useState(false);
   const [error, setError] = useState(null);
+  const { showToast } = useToast();
 
   const loadServiceData = useCallback(async () => {
     try {
@@ -62,10 +64,11 @@ export default function ServiceDetailView({ serviceId, onBack, onEdit, onDeleted
   const handleManualCheck = async () => {
     setProbing(true);
     try {
-      await triggerServiceCheck(serviceId);
+      const result = await triggerServiceCheck(serviceId);
       await loadServiceData();
+      showToast(`Probed ${result.success ? 'successfully' : 'with failure'} in ${result.response_time_ms ? Math.round(result.response_time_ms) : 0}ms`, result.success ? 'success' : 'error');
     } catch (err) {
-      alert(`Manual probe failed: ${err.message}`);
+      showToast(`Probe failed: ${err.message}`, 'error');
     } finally {
       setProbing(false);
     }
@@ -76,8 +79,9 @@ export default function ServiceDetailView({ serviceId, onBack, onEdit, onDeleted
     try {
       const updated = await updateService(service.id, { is_active: !service.is_active });
       setService(updated);
+      showToast(`Monitor ${updated.is_active ? 'resumed' : 'paused'}`, 'info');
     } catch (err) {
-      alert(`Failed to toggle service state: ${err.message}`);
+      showToast(`Failed to toggle monitor: ${err.message}`, 'error');
     }
   };
 
@@ -85,318 +89,284 @@ export default function ServiceDetailView({ serviceId, onBack, onEdit, onDeleted
     if (!window.confirm(`Are you sure you want to delete "${service?.name}"?`)) return;
     try {
       await deleteService(serviceId);
+      showToast('Monitor removed', 'info');
       onDeleted();
     } catch (err) {
-      alert(`Failed to delete service: ${err.message}`);
+      showToast(`Failed to delete service: ${err.message}`, 'error');
     }
   };
 
   if (loading && !service) {
     return (
-      <div className="py-20 flex flex-col items-center justify-center text-[#71717A] text-xs">
-        <Activity className="animate-spin text-[#5865D8] mb-3" size={24} />
-        Loading service details...
+      <div className="py-24 flex flex-col items-center justify-center text-[var(--text-muted)] text-xs animate-in fade-in">
+        <Activity className="animate-spin text-[var(--accent-primary)] mb-2" size={20} />
+        <span>Loading observability telemetry...</span>
       </div>
     );
   }
 
   if (error && !service) {
     return (
-      <div className="py-12 px-6">
+      <div className="p-6 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl space-y-3">
+        <div className="text-xs text-[var(--status-down-text)] font-medium">Error loading monitor: {error}</div>
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-xs text-[#71717A] hover:text-[#18181B] mb-4 font-medium transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--accent-text)] hover:underline"
         >
-          <ArrowLeft size={14} /> Back to Services
+          <ArrowLeft size={13} />
+          <span>Back to fleet</span>
         </button>
-        <div className="p-4 bg-[#FBEDEE] border border-[#C75C62]/30 rounded-xl text-[#A63F46] text-xs">
-          {error}
-        </div>
       </div>
     );
   }
 
+  const latestCheck = checks[0];
+  const chartPoints = [...checks].reverse();
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-150">
+      {/* Back button & Action Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mb-2 cursor-pointer font-medium"
+          >
+            <ArrowLeft size={13} />
+            <span>All monitors</span>
+          </button>
 
-      {/* Top Navigation Bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-medium text-[#71717A] hover:text-[#18181B] transition-colors cursor-pointer"
-        >
-          <ArrowLeft size={14} />
-          <span>SERVICES OVERVIEW</span>
-        </button>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+              {service?.name}
+            </h1>
+            <StatusIndicator state={service?.current_state} isActive={service?.is_active} />
+          </div>
 
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-mono mt-1">
+            <span className="truncate max-w-md">{service?.url}</span>
+            <a
+              href={service?.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        </div>
+
+        {/* Action Controls */}
         <div className="flex items-center gap-2">
+          {/* Probe Now */}
           <button
             onClick={handleManualCheck}
             disabled={probing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-[#F3F4F6] text-[#18181B] border border-[#E5E7EB] transition-colors disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] transition-colors disabled:opacity-50 cursor-pointer"
           >
-            <Play size={11} fill="currentColor" className={probing ? 'animate-spin' : ''} />
-            <span>{probing ? 'Probing...' : 'Check Now'}</span>
+            <Play size={11} fill="currentColor" className={probing ? 'animate-spin text-[var(--accent-primary)]' : ''} />
+            <span>{probing ? 'Probing...' : 'Probe Now'}</span>
           </button>
 
+          {/* Pause / Resume */}
           <button
             onClick={handleToggleActive}
-            title={service.is_active ? 'Pause monitoring' : 'Resume monitoring'}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-[#F3F4F6] text-[#71717A] hover:text-[#18181B] border border-[#E5E7EB] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
           >
-            <Power size={12} className={service.is_active ? 'text-[#71717A]' : 'text-[#4D9F72]'} />
-            <span>{service.is_active ? 'Pause' : 'Resume'}</span>
+            <Power size={12} className={service?.is_active ? 'text-[var(--status-healthy-dot)]' : 'text-[var(--text-muted)]'} />
+            <span>{service?.is_active ? 'Pause' : 'Resume'}</span>
           </button>
 
+          {/* Edit */}
           <button
             onClick={() => onEdit(service)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-[#F3F4F6] text-[#71717A] hover:text-[#18181B] border border-[#E5E7EB] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
           >
             <Edit2 size={12} />
             <span>Edit</span>
           </button>
 
+          {/* Delete */}
           <button
             onClick={handleDelete}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-[#FBEDEE] text-[#71717A] hover:text-[#A63F46] border border-[#E5E7EB] hover:border-[#C75C62]/30 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--bg-surface)] hover:bg-[var(--status-down-bg)] text-[var(--status-down-text)] border border-[var(--border-subtle)] hover:border-[var(--status-down-border)] transition-colors cursor-pointer"
           >
             <Trash2 size={12} />
-            <span>Delete</span>
           </button>
         </div>
       </div>
 
-      {/* Service Header Card */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight text-[#18181B]">
-                {service.name}
-              </h1>
-              <StatusBadge state={service.current_state} isActive={service.is_active} />
-            </div>
-
-            <div className="flex items-center gap-2 mt-1.5 text-xs text-[#71717A]">
-              <span className="px-1.5 py-0.5 rounded-md bg-[#F3F4F6] text-[#71717A] font-medium text-[10px]">
-                {service.http_method}
-              </span>
-              <a
-                href={service.url}
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-[#5865D8] hover:underline flex items-center gap-1 font-mono text-xs"
-              >
-                <span>{service.url}</span>
-                <ExternalLink size={11} />
-              </a>
-            </div>
+      {/* Observability Metrics Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Current Response Time */}
+        <div className="p-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)]">
+          <div className="text-xs text-[var(--text-muted)]">Current Response Time</div>
+          <div className="text-2xl font-semibold tracking-tight font-mono text-[var(--text-primary)] mt-1">
+            {latestCheck?.response_time_ms !== null && latestCheck?.response_time_ms !== undefined
+              ? `${Math.round(latestCheck.response_time_ms)}ms`
+              : '—'}
           </div>
-
-          <div className="flex items-center gap-4 text-xs text-[#71717A]">
-            <div>
-              <span>Interval:</span> <span className="text-[#18181B] font-medium">{service.check_interval_seconds}s</span>
-            </div>
-            <div>
-              <span>Timeout:</span> <span className="text-[#18181B] font-medium">{service.timeout_seconds}s</span>
-            </div>
-            <div>
-              <span>Threshold:</span> <span className="text-[#18181B] font-medium">{service.consecutive_failures}/{service.failure_threshold}</span>
-            </div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            {latestCheck ? `HTTP ${latestCheck.status_code || 'Err'}` : 'No checks recorded'}
           </div>
         </div>
-      </div>
 
-      {/* Metric Cards (Neutral) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="p-4 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">Uptime</div>
-          <div className="text-2xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {summary ? `${summary.uptime_percentage.toFixed(2)}%` : '—'}
+        {/* 30-Day Uptime */}
+        <div className="p-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)]">
+          <div className="text-xs text-[var(--text-muted)]">Uptime (30d window)</div>
+          <div className="text-2xl font-semibold tracking-tight font-mono text-[var(--text-primary)] mt-1">
+            {summary?.uptime_percentage !== null && summary?.uptime_percentage !== undefined
+              ? `${summary.uptime_percentage.toFixed(2)}%`
+              : '100.00%'}
           </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">Historical ratio</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            {summary ? `${summary.total_checks} total checks` : 'Evaluating...'}
+          </div>
         </div>
 
-        <div className="p-4 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">Avg Latency</div>
-          <div className="text-2xl font-semibold text-[#18181B] tracking-tight mt-1">
+        {/* Average Latency */}
+        <div className="p-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)]">
+          <div className="text-xs text-[var(--text-muted)]">Average Latency</div>
+          <div className="text-2xl font-semibold tracking-tight font-mono text-[var(--accent-text)] mt-1">
             {summary?.avg_response_time_ms !== null && summary?.avg_response_time_ms !== undefined
               ? `${Math.round(summary.avg_response_time_ms)}ms`
               : '—'}
           </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">Successful probes</div>
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            P95: {summary?.p95_latency_ms ? `${Math.round(summary.p95_latency_ms)}ms` : '—'}
+          </div>
         </div>
 
-        <div className="p-4 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">Total Checks</div>
-          <div className="text-2xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {summary?.total_checks ?? checks.length}
+        {/* Configuration Profile */}
+        <div className="p-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)]">
+          <div className="text-xs text-[var(--text-muted)]">Check Interval & Threshold</div>
+          <div className="text-lg font-semibold tracking-tight font-mono text-[var(--text-primary)] mt-1">
+            {service?.check_interval_seconds || 30}s / {service?.failure_threshold || 3}x
           </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">All-time</div>
-        </div>
-
-        <div className="p-4 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">Successful</div>
-          <div className="text-2xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {summary?.successful_checks ?? checks.filter(c => c.success).length}
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+            Timeout: {service?.timeout_seconds || 10}s
           </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">Healthy probes</div>
-        </div>
-
-        <div className="p-4 bg-white border border-[#E5E7EB] rounded-xl shadow-xs">
-          <div className="text-xs font-medium text-[#71717A]">Failed</div>
-          <div className="text-2xl font-semibold text-[#18181B] tracking-tight mt-1">
-            {summary?.failed_checks ?? checks.filter(c => !c.success).length}
-          </div>
-          <div className="text-[11px] text-[#A1A1AA] mt-1">Timeouts / Errors</div>
         </div>
       </div>
 
       {/* Response Time Chart */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-3">
+      <div className="p-5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)] space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity size={16} className="text-[#5865D8]" />
-            <h2 className="text-xs font-semibold text-[#71717A] uppercase tracking-wider">
-              RESPONSE TIME HISTORY
+            <Activity size={14} className="text-[var(--accent-primary)]" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              Latency History (Last 50 checks)
             </h2>
           </div>
-          <span className="text-xs text-[#A1A1AA]">Recent 50 checks</span>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            Hover to view probe timestamp and status
+          </span>
         </div>
 
-        <ResponseTimeChart
-          points={[...checks].reverse().map(c => ({
-            id: c.id,
-            service_id: c.service_id,
-            service_name: service.name,
-            timestamp: c.checked_at,
-            response_time_ms: c.response_time_ms,
-            success: c.success,
-            status_code: c.status_code,
-          }))}
-          height={200}
-        />
+        <ResponseTimeChart points={chartPoints} height={180} showStats={true} />
       </div>
 
-      {/* Incidents Section */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-4">
-        <div className="flex items-center gap-2">
-          <ShieldAlert size={16} className="text-[#71717A]" />
-          <h2 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
-            INCIDENTS FOR THIS SERVICE ({incidents.length})
-          </h2>
-        </div>
+      {/* Recent Incidents for this monitor */}
+      {incidents.length > 0 && (
+        <div className="p-5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)] space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert size={14} className="text-[var(--status-down-dot)]" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              Incident History ({incidents.length})
+            </h2>
+          </div>
 
-        {incidents.length > 0 ? (
-          <div className="space-y-3">
+          <div className="divide-y divide-[var(--border-subtle)]">
             {incidents.map((inc) => {
               const isOpen = inc.status === 'OPEN';
-              const start = new Date(inc.started_at);
-              const end = inc.resolved_at ? new Date(inc.resolved_at) : null;
-              const durationSec = end ? Math.round((end - start) / 1000) : null;
-
               return (
-                <div
-                  key={inc.id}
-                  className={`p-4 rounded-xl border text-xs transition-colors ${
-                    isOpen
-                      ? 'bg-[#FBEDEE] border-[#C75C62]/20'
-                      : 'bg-[#F7F8FA] border-[#E5E7EB]'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${
-                        isOpen
-                          ? 'bg-[#FBEDEE] text-[#A63F46] border-[#C75C62]/30'
-                          : 'bg-[#ECF7F0] text-[#347A55] border-[#4D9F72]/30'
-                      }`}>
-                        {inc.status}
-                      </span>
-                      <span className="font-medium text-[#18181B]">Incident #{inc.id}</span>
-                      <span className="text-[#A1A1AA]">•</span>
-                      <span className="text-[#71717A]">Failures: {inc.failure_count}</span>
-                    </div>
-
-                    <div className="text-[#71717A] text-[11px]">
-                      {start.toLocaleString()}
-                      {end && ` → ${end.toLocaleTimeString()} (${durationSec}s)`}
-                    </div>
+                <div key={inc.id} className="py-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isOpen ? 'bg-[var(--status-down-dot)] pulse-red' : 'bg-[var(--text-muted)]'
+                      }`}
+                    />
+                    <span className="font-medium text-[var(--text-primary)]">
+                      Incident #{inc.id}
+                    </span>
+                    <span className="text-[var(--text-secondary)]">
+                      {inc.last_error_message || 'Probe timeout'}
+                    </span>
                   </div>
 
-                  {inc.last_error_message && (
-                    <div className="text-[#A63F46] mb-1">
-                      <span className="text-[#71717A]">Error:</span> {inc.last_error_message}
-                    </div>
-                  )}
-
-                  {inc.recovery_message && (
-                    <div className="text-[#347A55]">
-                      <span className="text-[#71717A]">Recovery:</span> {inc.recovery_message}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3 font-mono text-[11px] text-[var(--text-muted)]">
+                    <span className={isOpen ? 'text-[var(--status-down-text)] font-semibold' : ''}>
+                      {isOpen ? 'ACTIVE OUTAGE' : 'RESOLVED'}
+                    </span>
+                    <span>{new Date(inc.started_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
                 </div>
               );
             })}
           </div>
-        ) : (
-          <div className="py-6 text-center text-xs text-[#71717A] border border-dashed border-[#E5E7EB] rounded-xl">
-            No incidents recorded for this service.
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Recent Checks Table */}
-      <div className="p-6 bg-white border border-[#E5E7EB] rounded-xl shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-[#71717A] uppercase tracking-wider">
-            RECENT CHECK RESULTS
+      {/* Recent Probe Logs Table */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl shadow-[var(--shadow-subtle)] overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+            Probe Telemetry Stream
           </h2>
-          <span className="text-xs text-[#A1A1AA]">Last 50 results</span>
+          <span className="text-[11px] text-[var(--text-muted)] font-mono">
+            Showing latest {checks.length} checks
+          </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-96">
           <table className="w-full text-left text-xs">
-            <thead className="text-[11px] text-[#71717A] uppercase tracking-wider border-b border-[#E5E7EB] bg-[#F7F8FA]">
+            <thead className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] sticky top-0">
               <tr>
-                <th className="py-2.5 px-3 font-medium">Outcome</th>
-                <th className="py-2.5 px-3 font-medium">Timestamp</th>
-                <th className="py-2.5 px-3 font-medium">Status Code</th>
-                <th className="py-2.5 px-3 font-medium">Latency</th>
-                <th className="py-2.5 px-3 font-medium">Error Details</th>
+                <th className="py-2 px-4 font-medium">Outcome</th>
+                <th className="py-2 px-4 font-medium">Status Code</th>
+                <th className="py-2 px-4 font-medium text-right">Response Time</th>
+                <th className="py-2 px-4 font-medium">Timestamp</th>
+                <th className="py-2 px-4 font-medium">Diagnostic Details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E7EB]">
+            <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
               {checks.map((chk) => (
-                <tr key={chk.id} className="hover:bg-[#F7F8FA] transition-colors">
-                  <td className="py-2.5 px-3">
+                <tr key={chk.id} className="hover:bg-[var(--bg-surface-hover)] transition-colors">
+                  <td className="py-2.5 px-4 font-sans">
                     {chk.success ? (
-                      <span className="inline-flex items-center gap-1.5 text-[#347A55] font-medium">
-                        <CheckCircle2 size={13} className="text-[#4D9F72]" /> Success
+                      <span className="inline-flex items-center gap-1.5 text-[var(--status-healthy-text)] font-medium text-xs">
+                        <CheckCircle2 size={13} className="text-[var(--status-healthy-dot)]" />
+                        <span>Pass</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[#A63F46] font-medium">
-                        <XCircle size={13} className="text-[#C75C62]" /> Failure
+                      <span className="inline-flex items-center gap-1.5 text-[var(--status-down-text)] font-medium text-xs">
+                        <XCircle size={13} className="text-[var(--status-down-dot)]" />
+                        <span>Fail</span>
                       </span>
                     )}
                   </td>
-                  <td className="py-2.5 px-3 text-[#71717A]">
-                    {new Date(chk.checked_at).toLocaleTimeString()}
+                  <td className="py-2.5 px-4">
+                    {chk.status_code ? (
+                      <span className="px-1.5 py-0.5 rounded text-[11px] bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                        {chk.status_code}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--text-muted)]">—</span>
+                    )}
                   </td>
-                  <td className="py-2.5 px-3">
-                    <span className={`px-1.5 py-0.5 rounded-md text-[11px] font-medium ${
-                      chk.status_code && chk.status_code >= 200 && chk.status_code < 300
-                        ? 'bg-[#ECF7F0] text-[#347A55]'
-                        : 'bg-[#FBEDEE] text-[#A63F46]'
-                    }`}>
-                      {chk.status_code || '—'}
-                    </span>
+                  <td className="py-2.5 px-4 text-right">
+                    {chk.response_time_ms ? `${Math.round(chk.response_time_ms)}ms` : '—'}
                   </td>
-                  <td className="py-2.5 px-3 text-[#18181B] font-medium">
-                    {chk.response_time_ms ? `${chk.response_time_ms.toFixed(1)}ms` : '—'}
+                  <td className="py-2.5 px-4 text-[11px] text-[var(--text-muted)]">
+                    {new Date(chk.checked_at || chk.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })}
                   </td>
-                  <td className="py-2.5 px-3 text-[#71717A] max-w-md truncate">
-                    {chk.error_message || chk.error_type || '—'}
+                  <td className="py-2.5 px-4 text-[11px] text-[var(--text-secondary)] font-sans truncate max-w-xs">
+                    {chk.error_message || 'OK'}
                   </td>
                 </tr>
               ))}
@@ -404,7 +374,6 @@ export default function ServiceDetailView({ serviceId, onBack, onEdit, onDeleted
           </table>
         </div>
       </div>
-
     </div>
   );
 }

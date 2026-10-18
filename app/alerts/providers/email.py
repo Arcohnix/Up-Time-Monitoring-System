@@ -24,12 +24,18 @@ class EmailNotificationProvider(BaseNotificationProvider):
         enabled: bool = True,
         sender_fn: Optional[Callable[[EmailMessage], None]] = None,
     ):
-        self._smtp_host = smtp_host
+        self._smtp_host = smtp_host.strip() if smtp_host else None
         self._smtp_port = smtp_port
-        self._smtp_user = smtp_user
-        self._smtp_password = smtp_password
+        self._smtp_user = smtp_user.strip() if smtp_user else None
+        if smtp_password:
+            cleaned_pwd = smtp_password.strip()
+            if len(cleaned_pwd.replace(" ", "")) == 16:
+                cleaned_pwd = cleaned_pwd.replace(" ", "")
+            self._smtp_password = cleaned_pwd
+        else:
+            self._smtp_password = None
         self._use_tls = use_tls
-        self._from_address = from_address
+        self._from_address = from_address.strip() if from_address else "alerts@utms.local"
         self._enabled = enabled
         self._sender_fn = sender_fn
 
